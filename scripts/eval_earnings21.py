@@ -84,6 +84,7 @@ def main() -> None:
                       "hotwords": asr.hotwords,
                       "transcribed_chunks": res.transcribed, "cached_chunks": res.from_cache,
                       "audio_transcribed_sec": sum(c.end - c.start for c in res.chunks if not c.skip),
+                      "chunks": [[c.start, c.end, c.own_start, c.own_end, c.skip] for c in res.chunks],
                       "eval": ev, "manifest": res.manifest}
             (out_root / fid / f"{s}.words.json").write_text(
                 json.dumps([w.to_dict() for w in res.words], ensure_ascii=False), encoding="utf-8")

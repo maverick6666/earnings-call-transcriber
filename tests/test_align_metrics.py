@@ -7,7 +7,7 @@ import pytest
 
 from callscribe.align import align, edit_counts
 from callscribe.metrics import confidence, error_rate, evaluate, hallucinations, near, op_times, tagged_error
-from callscribe.normalize import normalize_en, normalize_ko_chars
+from callscribe.normalize import normalize_en, normalize_en_conventional, normalize_ko_chars
 from callscribe.words import RefToken, Word
 
 
@@ -100,3 +100,12 @@ def test_confidence_auc():
     c = confidence(ops, hyp)
     # 맞음 {0.9, 0.8} · 틀림 {0.3, 0.85}: 4쌍 중 3쌍에서 맞은 쪽이 높다
     assert c["auc"] == 0.75 and (c["right"], c["wrong"]) == (2, 2)
+
+
+def test_conventional_normalization_drops_fillers_and_joins_percent():
+    assert normalize_en_conventional("uh we're gonna grow") == ["we're", "going", "to", "grow"]
+    ref = [RefToken(t) for t in ("um", "margin", "was", "60%")]
+    hyp = [Word("margin", 0, 1), Word("was", 1, 2), Word("60", 2, 3), Word("%", 3, 3.2)]
+    raw = evaluate(ref, hyp, normalize=normalize_en)["overall"]
+    conv = evaluate(ref, hyp, normalize=normalize_en_conventional, join_percent=True)["overall"]
+    assert raw["S"] + raw["D"] + raw["I"] == 3 and conv["rate"] == 0.0

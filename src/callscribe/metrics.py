@@ -13,10 +13,12 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
+from dataclasses import replace
 
 import numpy as np
 
 from .align import Op, align, edit_counts
+from .normalize import merge_percent
 from .words import RefToken, Word
 
 NUMBER_TAGS = {"CARDINAL", "MONEY", "PERCENT", "QUANTITY", "ORDINAL", "YEAR", "DATE", "TIME"}
@@ -127,7 +129,7 @@ def confidence(ops: Sequence[Op], hyp: Sequence[Word]) -> dict:
 
 
 def evaluate(ref: Sequence[RefToken], hyp: Sequence[Word], *, cut_edges: Sequence[float] = (),
-             seams: Sequence[float] = (), radius: float = 2.0, normalize=None) -> dict:
+             seams: Sequence[float] = (), radius: float = 2.0, normalize=None, join_percent: bool = False) -> dict:
     """한 녹음의 점수. cut_edges = 녹음을 자른 모든 청크 가장자리, seams = 결과를 이어 붙인 자리."""
     norm = normalize or (lambda s: [s])
     ref_t: list[RefToken] = []
@@ -138,6 +140,9 @@ def evaluate(ref: Sequence[RefToken], hyp: Sequence[Word], *, cut_edges: Sequenc
     for w in hyp:
         for part in norm(w.text):
             hyp_w.append(Word(part, w.start, w.end, w.prob, w.chunk, w.agreed))
+    if join_percent:  # 관례 정규화: 숫자 뒤 % 를 앞 낱말에 붙인다(정답 · 받아쓰기 똑같이)
+        ref_t = merge_percent(ref_t, join=lambda x, t: replace(x, text=t))
+        hyp_w = merge_percent(hyp_w, join=lambda x, t: replace(x, text=t))
     ops = align([r.text for r in ref_t], [w.text for w in hyp_w])
     times = op_times(ops, ref_t, hyp_w)
     at_cut = near(times, cut_edges, radius)

@@ -97,6 +97,7 @@ def main() -> None:
             (out / f"{s}.json").write_text(json.dumps(
                 {"file": name, "strategy": s, "model": args.model, "duration": duration, "elapsed_sec": elapsed,
                  "audio_transcribed_sec": sum(c.end - c.start for c in res.chunks if not c.skip),
+                 "chunks": [[c.start, c.end, c.own_start, c.own_end, c.skip] for c in res.chunks],
                  "eval": ev, "manifest": res.manifest}, ensure_ascii=False, indent=1), encoding="utf-8")
             print(f"{name} {s} CER {ev['overall']['rate']} cut {ev['near_cut_edges']['rate']} {elapsed:.0f}s",
                   flush=True)
