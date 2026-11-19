@@ -1,0 +1,31 @@
+[project]
+name = "earnings-call-transcriber"
+version = "0.1.0"
+description = "어닝콜 받아쓰기: 청크 경계 손실과 오인식을 줄이는 방법을 같은 평가 틀에서 숫자로 비교"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+# 실제 받아쓰기(모델 내려받기 필요). RTX 50 계열은 CTranslate2 4.5+ · CUDA 12.8+ 가 필요하다는 보고가 있다.
+asr = ["faster-whisper>=1.1", "soundfile>=0.12"]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM"]
