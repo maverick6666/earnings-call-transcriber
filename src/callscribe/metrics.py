@@ -103,6 +103,29 @@ def hallucinations(ops: Sequence[Op], n_ref: int, min_run: int = HALLUCINATION_R
     return {"runs": runs, "words": words, "per_1k_ref_words": round(words / n_ref * 1000, 3) if n_ref else None}
 
 
+def confidence(ops: Sequence[Op], hyp: Sequence[Word]) -> dict:
+    """단어 확률이 맞음 · 틀림을 얼마나 가르나: AUC = 맞은 낱말 하나와 틀린 낱말 하나를 뽑았을 때 맞은 쪽 확률이 더 높을
+    확률(0.5 = 못 가름, 1 = 완벽). 겹친 구간 투표(O2)가 확률에 기대므로, 이 값이 낮으면 O2 를 쓰지 않는다."""
+    right, wrong = [], []
+    for op, _, j in ops:
+        if j is None or hyp[j].prob is None:
+            continue
+        (right if op == "C" else wrong).append(hyp[j].prob)
+    if not right or not wrong:
+        return {"auc": None, "right": len(right), "wrong": len(wrong)}
+    values = np.concatenate([right, wrong])
+    ranks = np.empty(len(values))
+    order = values.argsort(kind="mergesort")
+    ranks[order] = np.arange(1, len(values) + 1)
+    for v in np.unique(values):  # 같은 값은 평균 순위
+        same = values == v
+        if same.sum() > 1:
+            ranks[same] = ranks[same].mean()
+    u = ranks[: len(right)].sum() - len(right) * (len(right) + 1) / 2
+    return {"auc": round(float(u / (len(right) * len(wrong))), 4), "right": len(right), "wrong": len(wrong),
+            "mean_prob_right": round(float(np.mean(right)), 4), "mean_prob_wrong": round(float(np.mean(wrong)), 4)}
+
+
 def evaluate(ref: Sequence[RefToken], hyp: Sequence[Word], *, cut_edges: Sequence[float] = (),
              seams: Sequence[float] = (), radius: float = 2.0, normalize=None) -> dict:
     """한 녹음의 점수. cut_edges = 녹음을 자른 모든 청크 가장자리, seams = 결과를 이어 붙인 자리."""
@@ -126,4 +149,5 @@ def evaluate(ref: Sequence[RefToken], hyp: Sequence[Word], *, cut_edges: Sequenc
         "near_seams": region_error(ops, times, at_seam),
         "tagged": tagged_error(ops, ref_t),
         "hallucination": hallucinations(ops, len(ref_t)),
+        "confidence": confidence(ops, hyp_w),
     }

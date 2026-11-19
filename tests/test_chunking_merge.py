@@ -96,3 +96,15 @@ def test_output_check_rejects_words_in_skipped_silence():
     plan = [chunking.Chunk(0, 0, 10, 0, 10, skip=True), chunking.Chunk(1, 10, 20, 10, 20)]
     with pytest.raises(AssertionError):
         check_output([Word("thank", 3.0, 3.4)], plan)
+
+
+def test_vote_handles_timestamp_drift_without_duplicates():
+    # 두 창이 겹친 구간의 같은 낱말에 1.5초씩 다른 시각을 매겨도 한 번씩만, 순서대로
+    a = chunking.Chunk(0, 0.0, 30.0, 0.0, 22.5)
+    b = chunking.Chunk(1, 15.0, 45.0, 22.5, 45.0)
+    text = [f"w{k}" for k in range(40)]
+    wa = [Word(t, float(k), k + 0.4, 0.9) for k, t in enumerate(text) if k < 30]
+    wb = [Word(t, k + 1.5, k + 1.9, 0.9) for k, t in enumerate(text) if k >= 15]
+    merged = merge_vote([(a, wa), (b, wb)])
+    assert [w.text for w in merged] == text
+    assert all(x.start <= y.start for x, y in zip(merged, merged[1:], strict=False))

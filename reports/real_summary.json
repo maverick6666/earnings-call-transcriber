@@ -1,0 +1,211 @@
+{
+ "earnings21": {},
+ "zeroth": {
+  "large-v3-turbo": {
+   "B0": {
+    "files": 10,
+    "hours": 1.35,
+    "error_rate": {
+     "rate": 0.0907,
+     "ref": 19288
+    },
+    "S": 774,
+    "D": 341,
+    "I": 635,
+    "near_cut_edges": {
+     "rate": 0.5103,
+     "ref": 1211
+    },
+    "away_from_cut_edges": {
+     "rate": 0.0626,
+     "ref": 18077
+    },
+    "near_seams": {
+     "rate": 0.5103,
+     "ref": 1211
+    },
+    "number": {
+     "rate": null,
+     "ref": 0
+    },
+    "entity": {
+     "rate": null,
+     "ref": 0
+    },
+    "hallucination_runs_per_hour": 26.63,
+    "confidence_auc": 0.8122,
+    "audio_transcribed_x": 1.0
+   },
+   "B1": {
+    "files": 10,
+    "hours": 1.35,
+    "error_rate": {
+     "rate": 0.0691,
+     "ref": 19288
+    },
+    "S": 745,
+    "D": 252,
+    "I": 336,
+    "near_cut_edges": {
+     "rate": null,
+     "ref": 0
+    },
+    "away_from_cut_edges": {
+     "rate": 0.0691,
+     "ref": 19288
+    },
+    "near_seams": {
+     "rate": null,
+     "ref": 0
+    },
+    "number": {
+     "rate": null,
+     "ref": 0
+    },
+    "entity": {
+     "rate": null,
+     "ref": 0
+    },
+    "hallucination_runs_per_hour": 11.84,
+    "confidence_auc": 0.7779,
+    "audio_transcribed_x": 1.0
+   },
+   "O1": {
+    "files": 10,
+    "hours": 1.35,
+    "error_rate": {
+     "rate": 0.059,
+     "ref": 19288
+    },
+    "S": 732,
+    "D": 248,
+    "I": 158,
+    "near_cut_edges": {
+     "rate": 0.0565,
+     "ref": 5153
+    },
+    "away_from_cut_edges": {
+     "rate": 0.0599,
+     "ref": 14135
+    },
+    "near_seams": {
+     "rate": 0.05,
+     "ref": 5015
+    },
+    "number": {
+     "rate": null,
+     "ref": 0
+    },
+    "entity": {
+     "rate": null,
+     "ref": 0
+    },
+    "hallucination_runs_per_hour": 4.44,
+    "confidence_auc": 0.7486,
+    "audio_transcribed_x": 1.979
+   },
+   "O2": {
+    "files": 10,
+    "hours": 1.35,
+    "error_rate": {
+     "rate": 0.0648,
+     "ref": 19288
+    },
+    "S": 736,
+    "D": 281,
+    "I": 232,
+    "near_cut_edges": {
+     "rate": 0.0607,
+     "ref": 5153
+    },
+    "away_from_cut_edges": {
+     "rate": 0.0662,
+     "ref": 14135
+    },
+    "near_seams": {
+     "rate": 0.055,
+     "ref": 5015
+    },
+    "number": {
+     "rate": null,
+     "ref": 0
+    },
+    "entity": {
+     "rate": null,
+     "ref": 0
+    },
+    "hallucination_runs_per_hour": 6.66,
+    "confidence_auc": 0.7336,
+    "audio_transcribed_x": 1.979
+   },
+   "V1": {
+    "files": 6,
+    "hours": 0.95,
+    "error_rate": {
+     "rate": 0.0918,
+     "ref": 13574
+    },
+    "S": 509,
+    "D": 179,
+    "I": 558,
+    "near_cut_edges": {
+     "rate": 0.2121,
+     "ref": 2843
+    },
+    "away_from_cut_edges": {
+     "rate": 0.0599,
+     "ref": 10731
+    },
+    "near_seams": {
+     "rate": 0.2121,
+     "ref": 2843
+    },
+    "number": {
+     "rate": null,
+     "ref": 0
+    },
+    "entity": {
+     "rate": null,
+     "ref": 0
+    },
+    "hallucination_runs_per_hour": 34.74,
+    "confidence_auc": 0.7953,
+    "audio_transcribed_x": 0.938
+   },
+   "V2": {
+    "files": 5,
+    "hours": 0.83,
+    "error_rate": {
+     "rate": 0.0682,
+     "ref": 11911
+    },
+    "S": 443,
+    "D": 272,
+    "I": 97,
+    "near_cut_edges": {
+     "rate": 0.086,
+     "ref": 3498
+    },
+    "away_from_cut_edges": {
+     "rate": 0.0607,
+     "ref": 8413
+    },
+    "near_seams": {
+     "rate": 0.099,
+     "ref": 2434
+    },
+    "number": {
+     "rate": null,
+     "ref": 0
+    },
+    "entity": {
+     "rate": null,
+     "ref": 0
+    },
+    "hallucination_runs_per_hour": 7.27,
+    "confidence_auc": 0.7453,
+    "audio_transcribed_x": 1.018
+   }
+  }
+ }
+}

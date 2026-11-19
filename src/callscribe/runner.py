@@ -3,7 +3,8 @@
 - 같은 녹음 + 같은 설정 → 같은 결과(불변조건 5). 설정 · 모델 이름과 버전 · 녹음 식별값을 실행 기록에 남기고,
   결과 해시도 함께 적는다.
 - 받아쓰기 도중 멈췄다가 다시 돌리면, 끝난 청크는 저장본을 읽고 다시 받아 적지 않는다(상태 경계 시나리오).
-  저장본 열쇠는 (설정 해시, 녹음 식별값, 청크 구간)이라 설정이 바뀌면 섞이지 않는다.
+  저장본 열쇠는 (녹음 식별값, 모델 이름 · 버전 · 받아쓰기 설정, 청크 구간)이다. 받아쓰기 결과는 이것에만 달려 있어서,
+  같은 구간을 받아 적는 방식끼리(예: O1 과 O2 는 창이 같고 잇는 법만 다름) 저장본을 함께 쓴다.
 """
 
 from __future__ import annotations
@@ -24,9 +25,13 @@ STRATEGIES = ("B0", "B1", "O1", "O2", "V1", "V2")
 
 class Transcriber(Protocol):
     name: str
-    version: str
+    version: str  # 모델 · 엔진 버전. 받아쓰기 설정(언어 · beam · hotwords …)은 선택 속성 settings(dict)
 
     def transcribe(self, start: float, end: float) -> list[Word]: ...
+
+
+def transcriber_id(asr: Transcriber) -> dict:
+    return {"name": asr.name, "version": asr.version, "settings": getattr(asr, "settings", {})}
 
 
 @dataclass(frozen=True)
@@ -39,7 +44,9 @@ class RunConfig:
     vad_min: float = 5.0
     vad_pad: float = 1.0  # V2
     silence_db: float = -50.0
-    min_silence: float = 2.0
+    # 이보다 긴 말소리 없는 구간만 받아 적지 않는다(대기 음악 · 긴 침묵). 짧은 쉼은 청크 안에 그대로 두고 30초까지
+    # 이어 붙인다(WhisperX 의 cut & merge). 2초로 하면 문장마다 따로 잘려 앞뒤 문맥을 잃는다(낭독 자료에서 확인).
+    min_silence: float = 5.0
     extra: dict = field(default_factory=dict)  # 모델 설정(예: beam_size, language) — 해시에 들어간다
 
     def __post_init__(self):
@@ -83,7 +90,8 @@ def run(cfg: RunConfig, asr: Transcriber, duration: float, audio_id: str, *, cac
     problems = chunking.check_partition(chunks, duration)
     if problems:
         raise AssertionError(f"청크 계획이 녹음을 정확히 한 번 덮지 않는다: {problems}")
-    key = f"{cfg.digest()}-{hashlib.sha256(f'{audio_id}|{asr.name}|{asr.version}'.encode()).hexdigest()[:12]}"
+    tid = transcriber_id(asr)
+    key = hashlib.sha256(json.dumps({"audio": audio_id, **tid}, sort_keys=True).encode()).hexdigest()[:16]
     store = (cache_dir / key) if cache_dir else None
     if store:
         store.mkdir(parents=True, exist_ok=True)
@@ -107,7 +115,7 @@ def run(cfg: RunConfig, asr: Transcriber, duration: float, audio_id: str, *, cac
     words = merge.merge_vote(results) if cfg.strategy == "O2" else merge.merge_own(results)
     check_output(words, chunks)
     manifest = {
-        "config": cfg.to_dict(), "config_hash": cfg.digest(), "transcriber": {"name": asr.name, "version": asr.version},
+        "config": cfg.to_dict(), "config_hash": cfg.digest(), "transcriber": tid, "cache_key": key,
         "audio_id": audio_id, "duration": duration, "chunks": len(chunks),
         "skipped_chunks": sum(c.skip for c in chunks),
         "output_hash": hashlib.sha256(json.dumps([w.to_dict() for w in words]).encode()).hexdigest()[:16],

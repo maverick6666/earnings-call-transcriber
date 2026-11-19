@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from callscribe.align import align, edit_counts
-from callscribe.metrics import error_rate, evaluate, hallucinations, near, op_times, tagged_error
+from callscribe.metrics import confidence, error_rate, evaluate, hallucinations, near, op_times, tagged_error
 from callscribe.normalize import normalize_en, normalize_ko_chars
 from callscribe.words import RefToken, Word
 
@@ -92,3 +92,11 @@ def test_boundary_error_isolates_errors_near_cut_edges():
     ev = evaluate(ref, hyp, cut_edges=[20.0])
     assert ev["overall"]["D"] == 2
     assert ev["near_cut_edges"]["errors"] == 2 and ev["away_from_cut_edges"]["errors"] == 0
+
+
+def test_confidence_auc():
+    hyp = [Word("a", 0, 1, 0.9), Word("x", 1, 2, 0.3), Word("c", 2, 3, 0.8), Word("y", 3, 4, 0.85)]
+    ops = align(["a", "b", "c", "d"], [w.text for w in hyp])
+    c = confidence(ops, hyp)
+    # 맞음 {0.9, 0.8} · 틀림 {0.3, 0.85}: 4쌍 중 3쌍에서 맞은 쪽이 높다
+    assert c["auc"] == 0.75 and (c["right"], c["wrong"]) == (2, 2)
