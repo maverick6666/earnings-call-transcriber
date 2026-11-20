@@ -104,3 +104,25 @@ def test_fake_asr_is_deterministic_and_loses_words_cut_by_edges():
     cut = [w for w in tl.words if w.start < 40.0 < w.end]
     if cut:
         assert not any(abs(w.start - cut[0].start) < 1e-9 for w in w1)
+
+
+def test_transcribe_retries_with_trailing_silence_when_alignment_crashes():
+    """faster-whisper 1.2.1 의 단어 시각 맞추기가 넘어지면 끝에 1초 무음을 붙여 다시, 붙인 무음 안 낱말은 버린다."""
+    from callscribe.backends import SAMPLE_RATE, FasterWhisperASR
+
+    asr = object.__new__(FasterWhisperASR)  # 모델 없이: 받아쓰기 부분만 가짜로
+    asr.audio = np.zeros(SAMPLE_RATE * 4, dtype=np.float32)
+    asr.padded_retries = []
+    lengths = []
+
+    def fake_words(clip, start):
+        lengths.append(len(clip))
+        if len(lengths) == 1:
+            raise IndexError("boolean index did not match")
+        return [Word("real", start + 0.5, start + 0.8, 0.9), Word("ghost", start + 2.4, start + 2.9, 0.1)]
+
+    asr._words = fake_words
+    out = asr.transcribe(1.0, 3.0)
+    assert lengths == [2 * SAMPLE_RATE, 3 * SAMPLE_RATE]
+    assert [w.text for w in out] == ["real"]
+    assert asr.padded_retries == [(1.0, 3.0)]

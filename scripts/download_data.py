@@ -1,17 +1,16 @@
 """평가 자료 · 모델 내려받기(저장소 안 data/ · models/, 깃에는 올리지 않음).
 
     .venv/Scripts/python scripts/download_data.py earnings21   # Rev Earnings-21 mp3 44개 + 정답 (CC BY-SA 4.0)
-    .venv/Scripts/python scripts/download_data.py zeroth       # OpenSLR 40 Zeroth-Korean 10GB (CC BY 4.0)
+    .venv/Scripts/python scripts/download_data.py zeroth       # Zeroth-Korean 시험 묶음 60MB (CC BY 4.0, HF 사본)
     .venv/Scripts/python scripts/download_data.py models       # faster-whisper small · large-v3-turbo · large-v3
 
-받은 파일은 데이터로만 쓴다(실행하지 않음). 압축 풀기는 경로 밖으로 나가는 항목을 막는 'data' 필터로 한다.
+받은 파일은 데이터로만 쓴다(실행하지 않음).
 """
 
 from __future__ import annotations
 
 import json
 import sys
-import tarfile
 import urllib.request
 from pathlib import Path
 
@@ -21,7 +20,8 @@ MODELS = ROOT / "models"
 E21_API = "https://api.github.com/repos/revdotcom/speech-datasets/contents/earnings21/{}"
 E21_DIRS = ("media", "transcripts/nlp_references", "transcripts/wer_tags", "bias_lists")
 E21_FILES = ("earnings21-file-metadata.csv", "eval10-file-metadata.csv", "speaker-metadata.csv", "LICENSE.md")
-ZEROTH_URL = "https://www.openslr.org/resources/40/zeroth_korean.tar.gz"
+# OpenSLR 40 원본(10GB)은 미러가 초당 10~30KB 라, 같은 자료의 Hugging Face 사본에서 시험 묶음만 받는다.
+ZEROTH_HF = "https://huggingface.co/datasets/kresnik/zeroth_korean/resolve/main/{}"
 MODEL_SIZES = ("small", "large-v3-turbo", "large-v3")
 UA = {"User-Agent": "earnings-call-transcriber-eval"}
 
@@ -52,12 +52,9 @@ def earnings21() -> None:
 
 
 def zeroth() -> None:
-    out = DATA / "zeroth"
-    archive = out / "zeroth_korean.tar.gz"
-    fetch(ZEROTH_URL, archive)
-    print("압축 풀기", flush=True)
-    with tarfile.open(archive) as t:
-        t.extractall(out, filter="data")
+    out = DATA / "zeroth_hf"
+    fetch(ZEROTH_HF.format("data/test-00000-of-00001.parquet"), out / "test.parquet")
+    fetch(ZEROTH_HF.format("README.md"), out / "README.md")  # 출처 · 사용 조건
     print("zeroth 끝", flush=True)
 
 

@@ -73,6 +73,7 @@ class FasterWhisperASR:
     download_root: str | None = None  # 모델 파일 폴더(없으면 Hugging Face 기본 위치)
     name: str = "faster-whisper"
     version: str = field(init=False, default="")
+    padded_retries: list = field(init=False, default_factory=list)  # 끝에 무음을 붙여 다시 받아쓴 조각
 
     def __post_init__(self):
         use_pip_cuda_libs()
@@ -91,15 +92,25 @@ class FasterWhisperASR:
         return {"language": self.language, "beam_size": self.beam_size, "hotwords": self.hotwords,
                 "condition_on_previous_text": self.condition_on_previous_text}
 
-    def transcribe(self, start: float, end: float) -> list[Word]:  # pragma: no cover - 모델이 있어야 돈다
+    def transcribe(self, start: float, end: float) -> list[Word]:
         if self.audio is None:
             raise RuntimeError("audio 를 먼저 넣어야 한다")
         clip = self.audio[int(start * SAMPLE_RATE): int(end * SAMPLE_RATE)]
+        try:
+            return self._words(clip, start)
+        except IndexError:
+            # faster-whisper 1.2.1 의 단어 시각 맞추기가 조각 맨 끝의 아주 짧은 구간에서 넘어진다.
+            # 끝에 1초 무음을 붙여 다시 받아쓰고, 붙인 무음 안의 낱말은 버린다(이 경우만, 기록에 남김).
+            self.padded_retries.append((round(start, 3), round(end, 3)))
+            padded = np.concatenate([clip, np.zeros(SAMPLE_RATE, dtype=clip.dtype)])
+            return [w for w in self._words(padded, start) if w.start < end]
+
+    def _words(self, clip: np.ndarray, start: float) -> list[Word]:  # pragma: no cover
         segments, _ = self._model.transcribe(
             clip, language=self.language, beam_size=self.beam_size, word_timestamps=True, vad_filter=False,
             hotwords=self.hotwords, condition_on_previous_text=self.condition_on_previous_text)
         out = []
-        for seg in segments:
+        for seg in segments:  # 받아쓰기는 여기서 돈다(segments 는 게으른 생성기)
             for w in seg.words or []:
                 text = w.word.strip()
                 if text:

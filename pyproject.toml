@@ -8,8 +8,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# 실제 받아쓰기(모델 내려받기 필요). RTX 50 계열은 CTranslate2 4.5+ · CUDA 12.8+ 가 필요하다는 보고가 있다.
-asr = ["faster-whisper>=1.1", "soundfile>=0.12"]
+# 실제 받아쓰기(모델은 scripts/download_data.py models 로 내려받음). 평가는 faster-whisper 1.2.1 · CTranslate2 4.9 로 했다.
+# PyAV 16 부터 faster-whisper 1.2.1 이 쓰는 open(metadata_errors=…) 가 없어져 15 이하로 묶는다.
+# Windows 에서 CUDA 를 따로 깔지 않았다면 cuda 도 함께: pip install -e ".[asr,cuda]"
+asr = ["faster-whisper==1.2.1", "av<16", "soundfile>=0.12", "pyarrow>=15"]
+cuda = ["nvidia-cublas-cu12", "nvidia-cudnn-cu12"]
 dev = ["pytest>=8.0", "ruff>=0.6"]
 
 [build-system]

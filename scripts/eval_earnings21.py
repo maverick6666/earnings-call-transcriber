@@ -70,7 +70,7 @@ def main() -> None:
         terms = call_terms(ref, args.hotwords, seed=int(fid)) if args.hotwords else []
         asr.hotwords = hotwords(terms) if terms else None
         for s in todo:
-            t0 = time.time()
+            t0, n_retry = time.time(), len(asr.padded_retries)
             cfg = runner.RunConfig(s, min_silence=args.min_silence)
             res = runner.run(cfg, asr, duration, f"earnings21-{fid}", cache_dir=CACHE, energy=energy)
             elapsed = time.time() - t0
@@ -85,6 +85,7 @@ def main() -> None:
                       "transcribed_chunks": res.transcribed, "cached_chunks": res.from_cache,
                       "audio_transcribed_sec": sum(c.end - c.start for c in res.chunks if not c.skip),
                       "chunks": [[c.start, c.end, c.own_start, c.own_end, c.skip] for c in res.chunks],
+                      "padded_retries": asr.padded_retries[n_retry:],
                       "eval": ev, "manifest": res.manifest}
             (out_root / fid / f"{s}.words.json").write_text(
                 json.dumps([w.to_dict() for w in res.words], ensure_ascii=False), encoding="utf-8")

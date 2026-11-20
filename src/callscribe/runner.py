@@ -45,7 +45,8 @@ class RunConfig:
     vad_pad: float = 1.0  # V2
     silence_db: float = -50.0
     # 이보다 긴 말소리 없는 구간만 받아 적지 않는다(대기 음악 · 긴 침묵). 짧은 쉼은 청크 안에 그대로 두고 30초까지
-    # 이어 붙인다(WhisperX 의 cut & merge). 2초로 하면 문장마다 따로 잘려 앞뒤 문맥을 잃는다(낭독 자료에서 확인).
+    # 이어 붙인다(WhisperX 의 cut & merge). 2초로 하면 문장마다 따로 잘린다 — 낭독 한국어에서는 오히려 나았고
+    # (CER 6.2% vs 8.8%), 어닝콜에서는 말소리 감지가 놓친 말을 더 많이 건너뛰었다(reports/real_results.md ④).
     min_silence: float = 5.0
     extra: dict = field(default_factory=dict)  # 모델 설정(예: beam_size, language) — 해시에 들어간다
 
