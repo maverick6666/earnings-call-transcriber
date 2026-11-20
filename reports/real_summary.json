@@ -1030,139 +1030,139 @@
   },
   "large-v3-turbo-sil2": {
    "V1": {
-    "files": 2,
-    "hours": 2.51,
+    "files": 11,
+    "hours": 10.32,
     "error_rate": {
-     "rate": 0.2686,
-     "ref": 23467
+     "rate": 0.2262,
+     "ref": 97214
     },
-    "S": 1079,
-    "D": 4905,
-    "I": 320,
+    "S": 4839,
+    "D": 15802,
+    "I": 1344,
     "near_cut_edges": {
-     "rate": 0.4253,
-     "ref": 7815
+     "rate": 0.3629,
+     "ref": 27316
     },
     "away_from_cut_edges": {
-     "rate": 0.1904,
-     "ref": 15652
+     "rate": 0.1727,
+     "ref": 69898
     },
     "near_seams": {
-     "rate": 0.4253,
-     "ref": 7815
+     "rate": 0.3629,
+     "ref": 27317
     },
     "number": {
-     "rate": 0.2994,
-     "ref": 1927
+     "rate": 0.2276,
+     "ref": 7438
     },
     "entity": {
-     "rate": 0.2464,
-     "ref": 686
+     "rate": 0.2902,
+     "ref": 3205
     },
-    "hallucination_runs_per_hour": 2.39,
-    "confidence_auc": 0.7693,
-    "audio_transcribed_x": 0.81,
+    "hallucination_runs_per_hour": 1.36,
+    "confidence_auc": 0.7754,
+    "audio_transcribed_x": 0.86,
     "conventional": {
-     "files": 2,
-     "hours": 2.51,
+     "files": 11,
+     "hours": 10.32,
      "error_rate": {
-      "rate": 0.2408,
-      "ref": 22892
+      "rate": 0.1946,
+      "ref": 94178
      },
-     "S": 938,
-     "D": 4336,
-     "I": 239,
+     "S": 4293,
+     "D": 12893,
+     "I": 1141,
      "near_cut_edges": {
-      "rate": 0.4072,
-      "ref": 7638
+      "rate": 0.3363,
+      "ref": 26340
      },
      "away_from_cut_edges": {
-      "rate": 0.1575,
-      "ref": 15254
+      "rate": 0.1396,
+      "ref": 67838
      },
      "near_seams": {
-      "rate": 0.4072,
-      "ref": 7638
+      "rate": 0.3362,
+      "ref": 26341
      },
      "number": {
-      "rate": 0.2673,
-      "ref": 1927
+      "rate": 0.1955,
+      "ref": 7438
      },
      "entity": {
-      "rate": 0.2464,
-      "ref": 686
+      "rate": 0.2895,
+      "ref": 3205
      },
-     "hallucination_runs_per_hour": 2.39,
-     "confidence_auc": 0.7929,
-     "audio_transcribed_x": 0.81
+     "hallucination_runs_per_hour": 1.36,
+     "confidence_auc": 0.7919,
+     "audio_transcribed_x": 0.86
     }
    },
    "V2": {
-    "files": 1,
-    "hours": 0.91,
+    "files": 11,
+    "hours": 10.32,
     "error_rate": {
-     "rate": 0.4701,
-     "ref": 8753
+     "rate": 0.2287,
+     "ref": 97214
     },
-    "S": 352,
-    "D": 3681,
-    "I": 82,
+    "S": 4953,
+    "D": 15817,
+    "I": 1462,
     "near_cut_edges": {
-     "rate": 0.5623,
-     "ref": 4999
+     "rate": 0.3206,
+     "ref": 34106
     },
     "away_from_cut_edges": {
-     "rate": 0.3474,
-     "ref": 3754
+     "rate": 0.179,
+     "ref": 63108
     },
     "near_seams": {
-     "rate": 0.5778,
-     "ref": 4846
+     "rate": 0.3706,
+     "ref": 27315
     },
     "number": {
-     "rate": 0.4826,
-     "ref": 833
+     "rate": 0.229,
+     "ref": 7438
     },
     "entity": {
-     "rate": 0.4194,
-     "ref": 217
+     "rate": 0.2892,
+     "ref": 3205
     },
-    "hallucination_runs_per_hour": 2.19,
-    "confidence_auc": 0.7345,
-    "audio_transcribed_x": 0.577,
+    "hallucination_runs_per_hour": 1.74,
+    "confidence_auc": 0.7814,
+    "audio_transcribed_x": 0.924,
     "conventional": {
-     "files": 1,
-     "hours": 0.91,
+     "files": 11,
+     "hours": 10.32,
      "error_rate": {
-      "rate": 0.4537,
-      "ref": 8569
+      "rate": 0.1975,
+      "ref": 94178
      },
-     "S": 321,
-     "D": 3501,
-     "I": 66,
+     "S": 4352,
+     "D": 12953,
+     "I": 1296,
      "near_cut_edges": {
-      "rate": 0.551,
-      "ref": 4907
+      "rate": 0.2934,
+      "ref": 32975
      },
      "away_from_cut_edges": {
-      "rate": 0.3233,
-      "ref": 3662
+      "rate": 0.1458,
+      "ref": 61203
      },
      "near_seams": {
-      "rate": 0.5667,
-      "ref": 4754
+      "rate": 0.3447,
+      "ref": 26327
      },
      "number": {
-      "rate": 0.4706,
-      "ref": 833
+      "rate": 0.196,
+      "ref": 7438
      },
      "entity": {
-      "rate": 0.4194,
-      "ref": 217
+      "rate": 0.2883,
+      "ref": 3205
      },
-     "hallucination_runs_per_hour": 2.19,
-     "confidence_auc": 0.742,
-     "audio_transcribed_x": 0.577
+     "hallucination_runs_per_hour": 1.74,
+     "confidence_auc": 0.7976,
+     "audio_transcribed_x": 0.924
     }
    }
   },
