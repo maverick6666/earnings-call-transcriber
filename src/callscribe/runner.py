@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Protocol
@@ -111,7 +112,7 @@ def run(cfg: RunConfig, asr: Transcriber, duration: float, audio_id: str, *, cac
             if path:
                 tmp = path.with_suffix(".tmp")
                 tmp.write_text(json.dumps([w.to_dict() for w in words], ensure_ascii=False), encoding="utf-8")
-                tmp.replace(path)  # 다 쓴 뒤에만 이름을 바꿔, 중간에 멈춰도 반쯤 쓴 저장본이 남지 않게
+                _replace(tmp, path)  # 다 쓴 뒤에만 이름을 바꿔, 중간에 멈춰도 반쯤 쓴 저장본이 남지 않게
         results.append((c, words))
     words = merge.merge_vote(results) if cfg.strategy == "O2" else merge.merge_own(results)
     check_output(words, chunks)
@@ -122,6 +123,18 @@ def run(cfg: RunConfig, asr: Transcriber, duration: float, audio_id: str, *, cac
         "output_hash": hashlib.sha256(json.dumps([w.to_dict() for w in words]).encode()).hexdigest()[:16],
     }
     return RunResult(words, chunks, manifest, done, cached)
+
+
+def _replace(tmp: Path, path: Path, tries: int = 10, wait: float = 0.5) -> None:
+    """Windows 에서는 방금 쓴 파일을 백신 · 색인 프로그램이 잠깐 잡아 이름 바꾸기가 실패할 수 있다 → 잠깐 뒤 다시."""
+    for k in range(tries):
+        try:
+            tmp.replace(path)
+            return
+        except PermissionError:
+            if k == tries - 1:
+                raise
+            time.sleep(wait)
 
 
 def check_output(words: list[Word], chunks: list[chunking.Chunk]) -> None:

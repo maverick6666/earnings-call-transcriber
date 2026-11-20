@@ -126,3 +126,22 @@ def test_transcribe_retries_with_trailing_silence_when_alignment_crashes():
     assert lengths == [2 * SAMPLE_RATE, 3 * SAMPLE_RATE]
     assert [w.text for w in out] == ["real"]
     assert asr.padded_retries == [(1.0, 3.0)]
+
+
+def test_cache_write_retries_when_windows_holds_the_file():
+    """방금 쓴 저장본을 다른 프로그램이 잠깐 잡으면 이름 바꾸기를 다시 시도하고, 끝내 안 되면 오류를 낸다."""
+
+    class Flaky:
+        def __init__(self, fails):
+            self.fails, self.calls = fails, 0
+
+        def replace(self, _path):
+            self.calls += 1
+            if self.calls <= self.fails:
+                raise PermissionError("WinError 32")
+
+    ok = Flaky(fails=2)
+    runner._replace(ok, None, tries=5, wait=0)
+    assert ok.calls == 3
+    with pytest.raises(PermissionError):
+        runner._replace(Flaky(fails=9), None, tries=3, wait=0)
