@@ -13,6 +13,9 @@ dependencies = [
 # Windows 에서 CUDA 를 따로 깔지 않았다면 cuda 도 함께: pip install -e ".[asr,cuda]"
 asr = ["faster-whisper==1.2.1", "av<16", "soundfile>=0.12", "pyarrow>=15"]
 cuda = ["nvidia-cublas-cu12", "nvidia-cudnn-cu12"]
+# Qwen3-ASR(맥락을 넣는 음성 LLM). torch · transformers 가 무거워 별도 환경 권장(평가는 Python 3.12 · qwen-asr 0.0.6 ·
+# torch 2.11 cu128 · transformers 4.57). CUDA 판 torch 는 먼저 PyTorch 안내대로 깐다. 모델은 처음 실행 때 Hugging Face 에서 받음.
+qwen = ["qwen-asr==0.0.6", "librosa>=0.10"]
 dev = ["pytest>=8.0", "ruff>=0.6"]
 
 [build-system]

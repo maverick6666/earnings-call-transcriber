@@ -35,6 +35,12 @@ def transcriber_id(asr: Transcriber) -> dict:
     return {"name": asr.name, "version": asr.version, "settings": getattr(asr, "settings", {})}
 
 
+def cache_key(audio_id: str, asr: Transcriber) -> str:
+    """저장본 열쇠 = 녹음 + 모델 이름 · 버전 · 받아쓰기 설정. 청크 구간은 파일 이름이라 방식끼리 함께 쓴다."""
+    raw = json.dumps({"audio": audio_id, **transcriber_id(asr)}, sort_keys=True).encode()
+    return hashlib.sha256(raw).hexdigest()[:16]
+
+
 @dataclass(frozen=True)
 class RunConfig:
     strategy: str
@@ -93,7 +99,7 @@ def run(cfg: RunConfig, asr: Transcriber, duration: float, audio_id: str, *, cac
     if problems:
         raise AssertionError(f"청크 계획이 녹음을 정확히 한 번 덮지 않는다: {problems}")
     tid = transcriber_id(asr)
-    key = hashlib.sha256(json.dumps({"audio": audio_id, **tid}, sort_keys=True).encode()).hexdigest()[:16]
+    key = cache_key(audio_id, asr)
     store = (cache_dir / key) if cache_dir else None
     if store:
         store.mkdir(parents=True, exist_ok=True)

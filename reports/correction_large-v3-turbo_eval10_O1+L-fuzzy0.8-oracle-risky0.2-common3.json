@@ -1,0 +1,54 @@
+{
+ "tag": "O1+L-fuzzy0.8-oracle-risky0.2-common3",
+ "subset": "eval10",
+ "hyp": "asr",
+ "model": "large-v3-turbo",
+ "calls": [
+  "4320211",
+  "4341191",
+  "4346818",
+  "4359971",
+  "4365024",
+  "4366522",
+  "4366893",
+  "4367535",
+  "4383161",
+  "4384964",
+  "4387332"
+ ],
+ "wer": [
+  0.10355,
+  0.10339
+ ],
+ "entity_error": [
+  0.1869,
+  0.16318
+ ],
+ "number_error": [
+  0.11361,
+  0.11535
+ ],
+ "outcome": {
+  "fixed": 91,
+  "broke": 85,
+  "still_wrong": 24,
+  "neutral": 0,
+  "applied": 200,
+  "over_correction_rate": 0.425
+ },
+ "asked_segments": 1461,
+ "segments": 1461,
+ "decisions": {
+  "ok": 187,
+  "common_words_without_risk": 278,
+  "not_similar": 170,
+  "old_not_found": 10,
+  "adds_or_drops_part": 53,
+  "inflection_only": 77,
+  "adds_or_drops_words": 64,
+  "old_is_known_name": 15,
+  "touches_number": 5,
+  "crosses_punctuation": 21
+ },
+ "llm": null
+}

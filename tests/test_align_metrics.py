@@ -109,3 +109,13 @@ def test_conventional_normalization_drops_fillers_and_joins_percent():
     raw = evaluate(ref, hyp, normalize=normalize_en)["overall"]
     conv = evaluate(ref, hyp, normalize=normalize_en_conventional, join_percent=True)["overall"]
     assert raw["S"] + raw["D"] + raw["I"] == 3 and conv["rate"] == 0.0
+
+
+def test_korean_numbers_are_read_as_sino_korean():
+    from callscribe.normalize import normalize_ko_conventional, sino_korean, spell_ko_numbers
+
+    assert [sino_korean(n) for n in (0, 3, 12, 1210, 2016, 10000, 15000, 1965, 100000000)] == [
+        "영", "삼", "십이", "천이백십", "이천십육", "만", "만오천", "천구백육십오", "일억"]
+    assert spell_ko_numbers("2016년 1,210원대 4.5% 3km") == "이천십육년 천이백십원대 사점오퍼센트 삼킬로미터"
+    # 정답(한글 숫자)과 받아쓰기(아라비아 숫자)가 같은 글자가 된다
+    assert normalize_ko_conventional("작년 12월 1,210원대") == normalize_ko_conventional("작년 십이월 천이백십원대")

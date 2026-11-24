@@ -12,18 +12,18 @@
 
 | 방식 | 영어 어닝콜 WER | 자른 곳 ±2초 안 | 그 밖 | 한국어 CER | 받아 적은 소리 |
 |---|---:|---:|---:|---:|---:|
-| B0 60초 고정(원래 방식) | 12.2% | **38.4%** | 10.4% | 9.1% | 1.0배 |
-| B1 모델에 통째로 맡기기 | 10.7% | – | – | 6.9% | 1.0배 |
-| **O1 겹쳐 자르기** | **10.35%** | **10.0%** | 10.5% | **5.9%** | 2.0배 |
-| O2 겹쳐 자르기 + 투표 | 10.35% | 10.2% | 10.4% | 6.5% | 2.0배 |
-| V1 무음 건너뛰기 | 17.3% | 29.5% | 13.9% | 8.8% | 0.9배 |
-| V2 무음 건너뛰기 + 1초 겹침 | 17.6% | 24.5% | 14.4% | 7.3% | 1.0배 |
+| B0 60초 고정(원래 방식) | 12.2% | **38.4%** | 10.4% | 7.3% | 1.0배 |
+| B1 모델에 통째로 맡기기 | 10.7% | – | – | 5.1% | 1.0배 |
+| **O1 겹쳐 자르기** | **10.35%** | **10.0%** | 10.5% | **4.2%** | 2.0배 |
+| O2 겹쳐 자르기 + 투표 | 10.35% | 10.2% | 10.4% | 4.7% | 2.0배 |
+| V1 무음 건너뛰기 | 17.3% | 29.5% | 13.9% | 7.0% | 0.9배 |
+| V2 무음 건너뛰기 + 1초 겹침 | 17.6% | 24.5% | 14.4% | 5.7% | 1.0배 |
 
-large-v3-turbo · Earnings-21 Eval-10(실제 어닝콜 11건 · 10.3시간) · Zeroth-Korean(1.35시간). 모델별 · 칸별 전체 표와 설명은
-[**평가 보고서**](reports/real_results.md).
+large-v3-turbo · Earnings-21 Eval-10(실제 어닝콜 11건 · 10.3시간) · Zeroth-Korean(1.35시간, 정답이 숫자를 한글로 적어 받아쓰기의
+숫자도 한글 읽기로 맞춰 셈). 모델별 · 칸별 전체 표와 설명은 [**평가 보고서**](reports/real_results.md).
 
-- **경계 손실은 실제로 크다.** 60초 고정은 자른 곳 ±2초 안 오류가 그 밖의 3.7배(한국어 8배)다.
-- **겹쳐 자르기는 모든 모델 · 언어에서 이 차이를 없앤다.** 60초 고정보다 영어 33통화 중 32, 한국어 20개 중 18에서 낮았다(모델 3개 · 2개).
+- **경계 손실은 실제로 크다.** 60초 고정은 자른 곳 ±2초 안 오류가 그 밖의 3.7배(한국어 11배)다.
+- **겹쳐 자르기는 모든 모델 · 언어에서 이 차이를 없앤다.** 60초 고정보다 영어 33통화 중 32, 한국어 20개 중 17에서 낮았다(모델 3개 · 2개).
 - **큰 모델에 통째로 맡기면 되풀이 고리에 빠진다.** large-v3 는 한 통화에서 16분 동안 같은 문장을 37번 적었다(WER 17.0%).
   겹쳐 자르기는 창마다 따로 받아 적어 고리가 이어지지 않는다(10.3%, 지어낸 문장 시간당 27.6 → 1.0).
 - **투표는 이득이 없었다.** 실제 단어 확률이 맞고 틀림을 충분히 가르지 못한다(AUC 0.72~0.82).
@@ -32,17 +32,18 @@ large-v3-turbo · Earnings-21 Eval-10(실제 어닝콜 11건 · 10.3시간) · Z
 
 → 파이프라인 기본값은 **large-v3-turbo + O1**. large-v3 와 정확도가 같고 시간은 3분의 1 이다.
 
-## 검수 층 (만드는 중)
+## 검수 층: 받아 적은 뒤 비싼 오류 잡기
 
 O1 뒤에 남은 비싼 오류는 고유명사(18.7%)와 숫자(11.4%)다. 받아 적은 뒤 낱말마다 '틀렸을 위험' 을 매기고
-(0층, `detect.py`), 고유명사만 용어집 안에서 고친다(1층, `entity_fix.py` — LLM 은 제안만 하고 규칙이 정한다).
-[**검수 층 보고서**](reports/review_layer.md)
+(0층, `detect.py`), 고유명사만 용어집 안에서 고친다(1층, `entity_fix.py` — 제안은 유사도나 LLM, 받아들일지는 규칙).
+turbo O1 실제 받아쓰기 11통화로 쟀다. [**검수 층 보고서**](reports/review_layer.md)
 
-- **글만 보는 교정기는 맞는 글도 망친다.** 정답 글(완벽한 받아쓰기)에 걸면 용어집 · 유사도 규칙만으로는 낱말의
-  1.23%, 고유명사 낱말의 2.81% 를 틀리게 바꿨다(Earnings-21 중 규칙을 만들 때 보지 않은 33통화).
-- 모양만 바꾸는 편집을 거르고, 흔한 낱말이 걸리면 0층 위험 근거를 요구해 **0.10% · 1.31%** 로 줄였다. 남은 것은
-  대부분 둘 다 실제 이름인 경우('Concho' ↔ 'Conoco')라 글만으로는 못 가린다.
-- 실제 받아쓰기에서 얼마나 고치는지, 위험 점수가 단어 확률(AUC 0.79)보다 나은지는 **아직 재지 않았다**.
+- **위험 점수로 사람 검수 시간을 줄인다.** 녹음의 20% 만 위험 높은 곳부터 들으면 고유명사 · 숫자 오류의 49% 가
+  잡힌다(계열이 다른 Qwen3-ASR 받아쓰기와 견준 신호를 넣으면 55%). 단어 확률만 쓰면 18% 로 아무 데나 듣는 것과 같았다.
+- **받아 적은 뒤 고치는 교정은 용어집 잡음에 강하다.** 엉뚱한 이름이 절반 섞인 용어집으로도 고유명사 오류가
+  18.7% → 16.3%(92곳을 바꿔 78곳 고침 · 8곳 망침). 같은 용어집을 받아쓸 때 넣으면(hotwords) 18.1% 로 효과가 없었다.
+  정확한 용어집이면 둘을 함께 써서 14.7%.
+- **흔한 낱말은 고치지 않는다.** 위험 표시를 근거로 흔한 낱말 바꿈을 허용하면 망침이 8곳 → 85~123곳으로 늘었다.
 
 ## 무엇을 재는가
 
@@ -85,14 +86,16 @@ src/callscribe/
   glossary.py    +P 용어집 · hotwords · 용어 재현율
   datasets.py    Earnings-21(.nlp · wer_tag.json) · Zeroth-Korean 읽기, 긴 한국어 오디오 만들기
   backends.py    faster-whisper 연결 · 말소리 감지
+  qwen.py        Qwen3-ASR 연결(맥락 프롬프트 · 여러 창 한 번에) · 시각 맞추기 결과를 원문 낱말에 옮겨 붙이기
   simulate.py    가짜 통화 · 가짜 모델
 scripts/
   download_data.py   평가 자료 · 모델 내려받기
   eval_earnings21.py eval_zeroth.py   실제 평가(방식 × 모델)
+  eval_qwen.py       Qwen3-ASR 를 같은 O1 창 · 같은 채점으로(맥락 없음 · 정확한 용어집 · 섞인 용어집)
   rescore.py summarize.py per_file.py make_tables.py   다시 채점 · 묶어 세기 · 통화별 표 · 보고서 표
   simulate_compare.py   가짜 모델 비교
   eval_detector.py eval_correction.py review_tables.py   검수 0층 · 1층 평가 · 보고서 표
-tests/   정렬 · 점수 · 청크 · 잇기 · 실행 · 자료 읽기 · 교정 · 용어집 · 검수 층 (68개, 모델 없이 돈다)
+tests/   정렬 · 점수 · 청크 · 잇기 · 실행 · 자료 읽기 · 교정 · 용어집 · 검수 층 · Qwen 시각 옮기기 (71개, 모델 없이 돈다)
 ```
 
 ## 실행
@@ -109,10 +112,14 @@ python scripts/eval_earnings21.py --model large-v3-turbo --strategies B0,B1,O1,O
 python scripts/eval_zeroth.py --model large-v3-turbo --strategies B0,B1,O1,O2,V1,V2
 python scripts/rescore.py && python scripts/summarize.py
 
+# Qwen3-ASR(별도 환경: CUDA 판 torch 를 먼저 깔고 pip install -e ".[qwen]")
+python scripts/eval_qwen.py --corpus earnings21 --context oracle   # none · oracle · noisy
+python scripts/eval_qwen.py --corpus zeroth
+
 # 검수 층(저장된 받아쓰기만 씀 — 모델 · 그래픽카드 없이)
 python scripts/eval_detector.py --model large-v3-turbo --alt small
-python scripts/eval_correction.py --model large-v3-turbo --proposer fuzzy --glossary noisy --risky-top 0.2
-ANTHROPIC_API_KEY=... python scripts/eval_correction.py --model large-v3-turbo --proposer llm --glossary noisy --risky-top 0.2
+python scripts/eval_correction.py --model large-v3-turbo --proposer fuzzy --glossary noisy
+ANTHROPIC_API_KEY=... python scripts/eval_correction.py --model large-v3-turbo --proposer llm --glossary noisy
 python scripts/eval_correction.py --hyp reference --proposer fuzzy --glossary noisy   # 정답 글에 걸어 과교정만
 python scripts/review_tables.py
 ```
@@ -123,6 +130,5 @@ python scripts/review_tables.py
 ## 한계
 
 - 한국어는 낭독 문장을 이어 붙인 자료다. 공개된 한국어 어닝콜 정답 자료가 없다.
-- +L 은 고유명사 제한 교정(검수 1층)으로 만들었지만, 정답 글에 걸어 과교정만 쟀다. 실제 받아쓰기 · LLM 평가와
-  0층 위험 점수 평가는 아직이다([검수 층 보고서](reports/review_layer.md) 5절).
+- 검수 층은 영어 Earnings-21 받아쓰기(turbo · Qwen3-ASR O1)로만 쟀고, LLM 제안자는 API 키가 필요해 돌리지 않았다(유사도 제안자만).
 - 창 길이 · 겹침은 고르지 않고 처음 정한 값(30초 · 15초)을 썼다. 시험 자료를 보고 고친 것은 투표(O2) 하나이고 보고서에 적었다.
