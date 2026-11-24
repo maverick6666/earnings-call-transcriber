@@ -32,6 +32,18 @@ large-v3-turbo · Earnings-21 Eval-10(실제 어닝콜 11건 · 10.3시간) · Z
 
 → 파이프라인 기본값은 **large-v3-turbo + O1**. large-v3 와 정확도가 같고 시간은 3분의 1 이다.
 
+## 검수 층 (만드는 중)
+
+O1 뒤에 남은 비싼 오류는 고유명사(18.7%)와 숫자(11.4%)다. 받아 적은 뒤 낱말마다 '틀렸을 위험' 을 매기고
+(0층, `detect.py`), 고유명사만 용어집 안에서 고친다(1층, `entity_fix.py` — LLM 은 제안만 하고 규칙이 정한다).
+[**검수 층 보고서**](reports/review_layer.md)
+
+- **글만 보는 교정기는 맞는 글도 망친다.** 정답 글(완벽한 받아쓰기)에 걸면 용어집 · 유사도 규칙만으로는 낱말의
+  1.23%, 고유명사 낱말의 2.81% 를 틀리게 바꿨다(Earnings-21 중 규칙을 만들 때 보지 않은 33통화).
+- 모양만 바꾸는 편집을 거르고, 흔한 낱말이 걸리면 0층 위험 근거를 요구해 **0.10% · 1.31%** 로 줄였다. 남은 것은
+  대부분 둘 다 실제 이름인 경우('Concho' ↔ 'Conoco')라 글만으로는 못 가린다.
+- 실제 받아쓰기에서 얼마나 고치는지, 위험 점수가 단어 확률(AUC 0.79)보다 나은지는 **아직 재지 않았다**.
+
 ## 무엇을 재는가
 
 | 숫자 | 뜻 |
@@ -67,6 +79,9 @@ src/callscribe/
   merge.py       가운데에서 잇기 · 겹친 구간 투표(같은 자리 · 같은 낱말만 짝으로)
   runner.py      실행 · 저장본으로 이어 하기 · 실행 기록
   correction.py  +L 교정 검사(지어낸 문장 거르기)
+  detect.py      검수 0층: 낱말마다 틀렸을 위험(확률 · 겹친 창 일치 · 어휘 · 시간 · 다른 모델) · 통화별 교차검증
+  entity_fix.py  검수 1층: 고유명사 제한 교정(후보 찾기 · 제안 · 규칙 검사 · 적용 · 과교정 세기)
+  llm.py         LLM 호출(Anthropic Messages API, 표준 라이브러리만) · 답 저장본
   glossary.py    +P 용어집 · hotwords · 용어 재현율
   datasets.py    Earnings-21(.nlp · wer_tag.json) · Zeroth-Korean 읽기, 긴 한국어 오디오 만들기
   backends.py    faster-whisper 연결 · 말소리 감지
@@ -76,7 +91,8 @@ scripts/
   eval_earnings21.py eval_zeroth.py   실제 평가(방식 × 모델)
   rescore.py summarize.py per_file.py make_tables.py   다시 채점 · 묶어 세기 · 통화별 표 · 보고서 표
   simulate_compare.py   가짜 모델 비교
-tests/   정렬 · 점수 · 청크 · 잇기 · 실행 · 자료 읽기 · 교정 · 용어집 (45개, 모델 없이 돈다)
+  eval_detector.py eval_correction.py review_tables.py   검수 0층 · 1층 평가 · 보고서 표
+tests/   정렬 · 점수 · 청크 · 잇기 · 실행 · 자료 읽기 · 교정 · 용어집 · 검수 층 (68개, 모델 없이 돈다)
 ```
 
 ## 실행
@@ -92,6 +108,13 @@ python scripts/download_data.py models            # small · large-v3-turbo · l
 python scripts/eval_earnings21.py --model large-v3-turbo --strategies B0,B1,O1,O2,V1,V2
 python scripts/eval_zeroth.py --model large-v3-turbo --strategies B0,B1,O1,O2,V1,V2
 python scripts/rescore.py && python scripts/summarize.py
+
+# 검수 층(저장된 받아쓰기만 씀 — 모델 · 그래픽카드 없이)
+python scripts/eval_detector.py --model large-v3-turbo --alt small
+python scripts/eval_correction.py --model large-v3-turbo --proposer fuzzy --glossary noisy --risky-top 0.2
+ANTHROPIC_API_KEY=... python scripts/eval_correction.py --model large-v3-turbo --proposer llm --glossary noisy --risky-top 0.2
+python scripts/eval_correction.py --hyp reference --proposer fuzzy --glossary noisy   # 정답 글에 걸어 과교정만
+python scripts/review_tables.py
 ```
 
 평가는 faster-whisper 1.2.1 · RTX 5070 으로 했다. 평가 자료 · 녹음 · 받아쓰기 결과 · 모델은 저장소에 넣지 않는다
@@ -100,5 +123,6 @@ python scripts/rescore.py && python scripts/summarize.py
 ## 한계
 
 - 한국어는 낭독 문장을 이어 붙인 자료다. 공개된 한국어 어닝콜 정답 자료가 없다.
-- +L(LLM 교정)은 검사 코드만 있고 LLM 으로 돌리지 않았다.
+- +L 은 고유명사 제한 교정(검수 1층)으로 만들었지만, 정답 글에 걸어 과교정만 쟀다. 실제 받아쓰기 · LLM 평가와
+  0층 위험 점수 평가는 아직이다([검수 층 보고서](reports/review_layer.md) 5절).
 - 창 길이 · 겹침은 고르지 않고 처음 정한 값(30초 · 15초)을 썼다. 시험 자료를 보고 고친 것은 투표(O2) 하나이고 보고서에 적었다.

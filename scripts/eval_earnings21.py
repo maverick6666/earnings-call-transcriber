@@ -97,23 +97,23 @@ def main() -> None:
                   flush=True)
 
 
-def _bias_list(name: str) -> list[str]:
-    path = DATA / "bias_lists" / f"{name}_list.txt"
+def _bias_list(name: str, data: Path | None = None) -> list[str]:
+    path = (data or DATA) / "bias_lists" / f"{name}_list.txt"
     return [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
-def call_terms(ref, mode: str, seed: int, max_terms: int = 40) -> list[str]:
+def call_terms(ref, mode: str, seed: int, max_terms: int = 40, data: Path | None = None) -> list[str]:
     """+P 용어집. Earnings-21 bias_lists 는 통화별이 아니라 전체 목록이라 통화마다 골라 쓴다.
 
     oracle: 전체 정답에 나오는 말(oracle_list) 중 이 통화 정답에 실제로 나오는 것 — 완벽한 용어집일 때의 상한.
     noisy : oracle 만큼의 엉뚱한 이름(distractor_list 에만 있는 Fortune 500 회사명 · CEO)을 섞음 — 잡음 섞인 용어집.
     """
     text = " " + " ".join(normalize_en(" ".join(t.text for t in ref))) + " "
-    oracle = [t for t in _bias_list("oracle") if f" {' '.join(normalize_en(t))} " in text]
+    oracle = [t for t in _bias_list("oracle", data) if f" {' '.join(normalize_en(t))} " in text]
     oracle = sorted(oracle, key=lambda t: (-text.count(f" {' '.join(normalize_en(t))} "), t))[:max_terms]
     if mode == "oracle":
         return [_pretty(t) for t in oracle]
-    extra = sorted(set(_bias_list("distractor")) - set(_bias_list("oracle")))
+    extra = sorted(set(_bias_list("distractor", data)) - set(_bias_list("oracle", data)))
     rng = random.Random(seed)
     mixed = oracle + rng.sample(extra, min(len(oracle), len(extra)))
     rng.shuffle(mixed)

@@ -27,8 +27,11 @@ NLP_HEADER = ["token", "speaker", "ts", "endTs", "punctuation", "case", "tags", 
 
 
 def _float(x: str) -> float | None:
-    x = x.strip()
-    return float(x) if x else None
+    """빈 칸 · 깨진 값('.' — Eval-10 밖 몇몇 파일에 있다)은 시각 없음으로 본다."""
+    try:
+        return float(x)
+    except ValueError:
+        return None
 
 
 def read_nlp(path: Path, wer_tags_path: Path | None = None) -> list[RefToken]:
