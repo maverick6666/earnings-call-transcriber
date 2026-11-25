@@ -63,7 +63,7 @@ def load_audio(path: str | Path) -> np.ndarray:
 @dataclass
 class FasterWhisperASR:
     audio: np.ndarray | None = None  # 16 kHz 모노 float32. 모델은 한 번 올리고 녹음마다 바꿔 끼운다
-    model_size: str = "large-v3"
+    model_size: str = "large-v3-turbo"  # 평가에서 정한 기본값(large-v3 와 정확도가 같고 3배 빠름)
     device: str = "cuda"
     compute_type: str = "float16"
     language: str | None = None

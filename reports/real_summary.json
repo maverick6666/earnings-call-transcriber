@@ -1238,71 +1238,71 @@
   },
   "qwen3-asr-1.7b-noisy": {
    "O1": {
-    "files": 1,
-    "hours": 0.91,
+    "files": 11,
+    "hours": 10.32,
     "error_rate": {
-     "rate": 0.0935,
-     "ref": 8753
+     "rate": 0.1149,
+     "ref": 97214
     },
-    "S": 340,
-    "D": 332,
-    "I": 146,
+    "S": 4761,
+    "D": 5183,
+    "I": 1228,
     "near_cut_edges": {
-     "rate": 0.0937,
-     "ref": 2306
+     "rate": 0.1079,
+     "ref": 26072
     },
     "away_from_cut_edges": {
-     "rate": 0.0934,
-     "ref": 6447
+     "rate": 0.1175,
+     "ref": 71142
     },
     "near_seams": {
-     "rate": 0.1093,
-     "ref": 2343
+     "rate": 0.124,
+     "ref": 25745
     },
     "number": {
-     "rate": 0.072,
-     "ref": 833
+     "rate": 0.0957,
+     "ref": 7438
     },
     "entity": {
-     "rate": 0.1429,
-     "ref": 217
+     "rate": 0.1794,
+     "ref": 3205
     },
-    "hallucination_runs_per_hour": 4.38,
+    "hallucination_runs_per_hour": 2.13,
     "confidence_auc": null,
-    "audio_transcribed_x": 2.0,
+    "audio_transcribed_x": 1.996,
     "conventional": {
-     "files": 1,
-     "hours": 0.91,
+     "files": 11,
+     "hours": 10.32,
      "error_rate": {
-      "rate": 0.0712,
-      "ref": 8569
+      "rate": 0.0837,
+      "ref": 94178
      },
-     "S": 314,
-     "D": 151,
-     "I": 145,
+     "S": 4390,
+     "D": 2241,
+     "I": 1248,
      "near_cut_edges": {
-      "rate": 0.073,
-      "ref": 2261
+      "rate": 0.0777,
+      "ref": 25316
      },
      "away_from_cut_edges": {
-      "rate": 0.0705,
-      "ref": 6308
+      "rate": 0.0859,
+      "ref": 68862
      },
      "near_seams": {
-      "rate": 0.0834,
-      "ref": 2279
+      "rate": 0.0923,
+      "ref": 24885
      },
      "number": {
-      "rate": 0.0672,
-      "ref": 833
+      "rate": 0.0878,
+      "ref": 7438
      },
      "entity": {
-      "rate": 0.1429,
-      "ref": 217
+      "rate": 0.1788,
+      "ref": 3205
      },
-     "hallucination_runs_per_hour": 4.38,
+     "hallucination_runs_per_hour": 2.23,
      "confidence_auc": null,
-     "audio_transcribed_x": 2.0
+     "audio_transcribed_x": 1.996
     }
    }
   },
@@ -2612,26 +2612,26 @@
   },
   "qwen3-asr-1.7b": {
    "O1": {
-    "files": 1,
-    "hours": 0.2,
+    "files": 10,
+    "hours": 1.35,
     "error_rate": {
-     "rate": 0.0629,
-     "ref": 2893
+     "rate": 0.0574,
+     "ref": 19288
     },
-    "S": 112,
-    "D": 46,
-    "I": 24,
+    "S": 699,
+    "D": 215,
+    "I": 194,
     "near_cut_edges": {
-     "rate": 0.0427,
-     "ref": 772
+     "rate": 0.0572,
+     "ref": 5153
     },
     "away_from_cut_edges": {
-     "rate": 0.0702,
-     "ref": 2121
+     "rate": 0.0575,
+     "ref": 14135
     },
     "near_seams": {
-     "rate": 0.0768,
-     "ref": 794
+     "rate": 0.0467,
+     "ref": 5015
     },
     "number": {
      "rate": null,
@@ -2641,30 +2641,30 @@
      "rate": null,
      "ref": 0
     },
-    "hallucination_runs_per_hour": 4.98,
+    "hallucination_runs_per_hour": 5.18,
     "confidence_auc": null,
-    "audio_transcribed_x": 1.99,
+    "audio_transcribed_x": 1.979,
     "conventional": {
-     "files": 1,
-     "hours": 0.2,
+     "files": 10,
+     "hours": 1.35,
      "error_rate": {
-      "rate": 0.0297,
-      "ref": 2893
+      "rate": 0.0404,
+      "ref": 19288
      },
-     "S": 38,
-     "D": 27,
-     "I": 21,
+     "S": 430,
+     "D": 173,
+     "I": 177,
      "near_cut_edges": {
-      "rate": 0.0168,
-      "ref": 772
+      "rate": 0.0402,
+      "ref": 5153
      },
      "away_from_cut_edges": {
-      "rate": 0.0344,
-      "ref": 2121
+      "rate": 0.0405,
+      "ref": 14135
      },
      "near_seams": {
-      "rate": 0.0302,
-      "ref": 794
+      "rate": 0.0309,
+      "ref": 5015
      },
      "number": {
       "rate": null,
@@ -2674,9 +2674,9 @@
       "rate": null,
       "ref": 0
      },
-     "hallucination_runs_per_hour": 4.98,
+     "hallucination_runs_per_hour": 5.18,
      "confidence_auc": null,
-     "audio_transcribed_x": 1.99
+     "audio_transcribed_x": 1.979
     }
    }
   }

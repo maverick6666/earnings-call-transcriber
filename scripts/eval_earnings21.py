@@ -43,7 +43,7 @@ def file_ids(subset: str) -> list[str]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default="large-v3")
+    ap.add_argument("--model", default="large-v3-turbo")
     ap.add_argument("--subset", default="eval10", help="eval10 · all · 쉼표로 이은 파일 번호")
     ap.add_argument("--strategies", default="B0,B1,O1,O2,V1,V2")
     ap.add_argument("--min-silence", type=float, default=runner.RunConfig("V1").min_silence,
