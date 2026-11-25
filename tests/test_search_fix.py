@@ -11,6 +11,7 @@ from callscribe.search_fix import (
     child_env,
     parse_proposals,
     parse_stream,
+    search_and_verify,
     transcript_like,
     transcript_urls,
     verify,
@@ -57,6 +58,7 @@ def test_parse_stream_collects_tool_results_sources_and_usage():
     assert [c["name"] for c in tr.calls] == ["WebSearch", "WebSearch", "WebFetch"]
     assert tr.results[0].sources[0] == ("https://www.sec.gov/Archives/x.htm", "Monro, Inc. Form 8-K")
     assert tr.results[2].sources == [("https://ir.monro.com/team", "")]  # 가져오기는 가져온 주소가 근거
+    assert [r.query for r in tr.results] == ["Monro Inc CFO", "Monro analysts", "names"]
     assert tr.cost_usd == 0.12 and tr.turns == 4 and not tr.is_error
     assert transcript_urls(tr) == ["https://www.fool.com/t/1"]
 
@@ -84,6 +86,25 @@ def test_verify_accepts_only_spellings_the_tools_returned():
     assert [why for _, why in verify(props, tr, words)] == [
         "ok", "ok", "evidence_mixed_with_transcript", "ok", "not_in_search_results", "url_not_seen",
         "source_is_transcript", "old_not_in_transcript"]
+
+
+def test_spelling_only_echoed_from_the_tool_input_is_not_evidence():
+    search = ('Links: [{"title":"GE names new CFO","url":"https://news.example/cfo"}]\n\n'
+              "GE named Carolina Dybeck Happe as CFO.")
+    page = "Carolina Dybeck Happe, Chief Financial Officer"
+    tr = parse_stream(stream({"edits": []}, [
+        ("WebSearch", {"query": "GE CFO Carolina Dybeck Happe"}, search),  # 검색어의 철자가 요약에 되풀이됐을 수 있다
+        ("WebFetch", {"url": "https://ge.example/leaders", "prompt": "Is Carolina Dybeck Happe the CFO?"}, page),
+        ("WebFetch", {"url": "https://ge.example/team", "prompt": "List every person's full name and job title"}, page),
+        ("WebSearch", {"query": "GE Haliade-X turbine"},
+         'Links: [{"title":"GE announces Haliade-X","url":"https://ge.example/hx"}]\n\nThe Haliade-X is big.'),
+    ]))
+    words = ws("our CFO Carolina DiBecchapa and the Holoyot X turbine")
+    props = [Proposal("Carolina DiBecchapa", "Carolina Dybeck Happe", "https://news.example/cfo"),
+             Proposal("Carolina DiBecchapa", "Carolina Dybeck Happe", "https://ge.example/leaders"),
+             Proposal("Carolina DiBecchapa", "Carolina Dybeck Happe", "https://ge.example/team"),
+             Proposal("Holoyot X", "Haliade-X", "https://ge.example/hx")]  # 링크 제목은 검색 엔진이 낸 것
+    assert [why for _, why in verify(props, tr, words)] == ["echo_of_query", "echo_of_query", "ok", "ok"]
 
 
 def test_spelling_must_match_on_word_boundaries():
@@ -138,6 +159,36 @@ def test_claude_search_caches_whole_session_and_raises_on_error(tmp_path):
     else:
         raise AssertionError("실패한 세션은 오류로 멈춰야 한다")
     assert len(list(tmp_path.iterdir())) == 1  # 실패한 세션은 저장하지 않는다
+
+
+def test_second_round_rechecks_only_proposals_short_of_evidence(tmp_path):
+    words = ws("thanks Brett Ponten and Scott Stemmer and Bob Smith and Maureen Mulhollen")
+    first = stream({"edits": [
+        {"old": "Brett Ponten", "new": "Brett Ponton", "url": "https://www.globenewswire.com/n/1"},  # ok
+        {"old": "Scott Stemmer", "new": "Scott Stember", "url": "https://example.com/mnro"},  # 전사문 섞임 → 다시
+        {"old": "Bob Smith", "new": "Bob Smyth", "url": "https://www.sec.gov/Archives/x.htm"},  # 결과에 없음 → 다시
+        {"old": "Jane Doe", "new": "Jane Dough", "url": "https://www.sec.gov/Archives/x.htm"},  # 받아쓰기에 없음
+    ]}, [("WebSearch", {"query": "Monro Inc CFO"}, SEARCH_TEXT),
+         ("WebSearch", {"query": "Monro analysts"}, MIXED_TEXT)])
+    second = stream({"edits": [
+        {"old": "Scott Stemmer", "new": "Scott Stember", "url": "https://example.com/mnro"},
+        {"old": "Bob Smith", "new": "Bob Smyth", "url": "https://other.com/x"},
+        {"old": "Maureen Mulhollen", "new": "Maureen Mulholland", "url": "https://example.com/mnro"},  # 새로 끼운 것
+    ]}, [("WebFetch", {"url": "https://example.com/mnro", "prompt": "List every person's full name and job title"},
+          "Scott Stember, analyst. Maureen Mulholland, General Counsel.")])
+    prompts = []
+
+    def fake(argv, stdin, env, timeout):
+        prompts.append(stdin)
+        return "\n".join(second if "ITEMS:" in stdin else first)
+
+    rounds = search_and_verify(ClaudeSearch(cache_dir=tmp_path, runner=fake), words, "Monro Inc", "3")
+    assert [why for _, why in rounds[0].checked] == [
+        "ok", "evidence_mixed_with_transcript", "not_in_search_results", "old_not_in_transcript"]
+    retry = prompts[1]
+    assert "Scott Stemmer" in retry and "Bob Smith" in retry and "Jane Doe" not in retry
+    assert "Brett Ponten" not in retry and "TRANSCRIPT:" not in retry  # 받아쓰기는 다시 넣지 않는다
+    assert [why for _, why in rounds[1].checked] == ["ok", "url_not_seen", "not_asked"]
 
 
 def test_child_env_drops_session_markers_keeps_auth():

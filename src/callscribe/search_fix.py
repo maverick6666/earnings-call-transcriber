@@ -13,7 +13,15 @@
 4. 근거는 어닝콜 전사문이 아니어야 하고, 근거가 든 결과에 전사문 주소가 섞여 있어도 안 된다. 시험 자료(Earnings-21)는
    실제 통화라 그 통화의 전사문이 웹에 있다 — 거기서 베끼면 정답을 보고 고치는 셈이다. 새 통화를 받아 적을 때는
    전사문이 아직 없으므로, 이 규칙은 평가를 실제 쓰임에 맞추는 것이다(지난 분기 전사문까지 막아 조금 불리하게 잰다).
+   검색 요약은 결과 여러 개를 한데 섞어 쓴 글이라 어느 주소에서 온 철자인지 가를 수 없다 — 그래서 결과 하나에라도
+   전사문이 섞이면 그 결과 전체를 근거로 쓰지 않는다. 그때는 전사문이 아닌 페이지를 따로 가져와(WebFetch) 근거로 댄다.
+5. 되풀이가 아니어야 한다. 검색 요약 · 가져오기 글은 도구 안의 모델이 쓴 글이라, LLM 이 검색어나 가져오기 지시에
+   기억한 철자를 넣으면 그 철자를 그대로 되풀이할 수 있다. 그래서 바꿀 말이 그 도구 호출의 입력(검색어 · 지시)에
+   있었다면 본문은 근거로 치지 않고, 검색 엔진이 돌려준 링크 제목에 있을 때만 인정한다.
 세션이 전사문 주소를 본 것 자체도 `transcript_urls` 로 남긴다.
+
+근거만 모자라 떨어진 제안(3~5)은 한 번 더 묻는다(`search_and_verify`): 그 제안만 모아 새 세션에 '전사문이 아닌
+페이지를 직접 열어 확인하라' 고 하고, 그 답도 같은 기계 확인을 거친다.
 """
 
 from __future__ import annotations
@@ -50,7 +58,14 @@ Rules
 - Do not rely on memory. Propose a correction only when a search or fetch result you saw in this session shows the \
 corrected spelling, and give that result's URL.
 - Never use transcripts of earnings calls (this call or any other). Do not search for them, pass blocked_domains \
-{json.dumps(list(TRANSCRIPT_HOSTS[:6]))} on every WebSearch, and ignore any transcript page that still shows up.
+{json.dumps(list(TRANSCRIPT_HOSTS))} on every WebSearch, and ignore any transcript page that still shows up.
+- Your answer is checked mechanically against the tool results, so make the evidence checkable:
+  - A WebSearch result counts only if none of its links is a transcript, and the spelling is in a link title or, \
+when your query did not contain that spelling, in the result text. Searching with the misheard words, the person's \
+role or the company (for example "Monro CFO 2020") lets the results show the real spelling.
+  - Otherwise WebFetch a page that is not a transcript (press release, SEC filing, company or investor-relations \
+page, news article) with a prompt that does not contain the spelling, for example "List every person's full name \
+and job title on this page, spelled exactly as written." Then give that page's URL.
 - "old" must be copied exactly from TRANSCRIPT (1 to 4 words). "new" is the corrected name only.
 - Change names only. Never change ordinary words, grammar, punctuation, numbers or filler words. A name that is \
 already spelled correctly needs no edit. If unsure, leave it.
@@ -66,6 +81,29 @@ def build_prompt(words: Sequence[Word], company: str, quarter: str = "") -> str:
     return f"{INSTRUCTIONS}\n\nCOMPANY: {company} ({when})\n\nTRANSCRIPT:\n" + " ".join(w.text for w in words)
 
 
+# 확인에 실패한 제안만 모아 한 번 더 묻는다 — 근거 페이지를 직접 열어(WebFetch) 확인하게. 받아쓰기는 다시 넣지 않는다.
+RETRY_INSTRUCTIONS = f"""Earlier you proposed these spelling corrections for proper names in an automatic \
+transcript of a company earnings call, but the evidence could not be checked: the search result you cited also \
+listed earnings call transcripts, your query or prompt already contained the spelling, or the cited result did not \
+show it.
+
+For each item, confirm the spelling from one page that is not a transcript: WebFetch the cited URL if it is not a \
+transcript, or find another page about the person or company (press release, SEC filing, company or \
+investor-relations page, news article, analyst profile). Use a WebFetch prompt that does not contain the spelling, \
+for example "List every person's full name and job title on this page, spelled exactly as written." Never use \
+transcripts of earnings calls; pass blocked_domains {json.dumps(list(TRANSCRIPT_HOSTS))} on any WebSearch.
+
+Keep "old" exactly as given. Drop an item if no page confirms it. Do not add new items.
+
+Answer with JSON only, no other text:
+{{"edits": [{{"old": "...", "new": "...", "url": "...", "evidence": "short quote showing the spelling"}}]}}"""
+
+
+def build_retry_prompt(items: Sequence[Proposal], company: str) -> str:
+    rows = [json.dumps({"old": p.old, "new": p.new, "url": p.url}, ensure_ascii=False) for p in items]
+    return f"{RETRY_INSTRUCTIONS}\n\nCOMPANY: {company}\n\nITEMS:\n" + "\n".join(rows)
+
+
 # ---------- claude -p 이 남긴 기록 읽기 ----------
 
 _LINKS = re.compile(r"Links:\s*(\[.*?\])\s*(?:\n|$)", re.S)
@@ -77,6 +115,7 @@ class ToolResult:
     tool: str
     text: str  # 도구가 돌려준 글(검색은 결과 요약 · 제목, 가져오기는 페이지에서 뽑은 글)
     sources: list[tuple[str, str]]  # (주소, 제목)
+    query: str = ""  # 그 도구 호출의 입력(검색어 · 가져오기 지시) — 되풀이 확인(verify 5)에 쓴다
 
 
 @dataclass
@@ -142,7 +181,8 @@ def parse_stream(lines: Iterable[str]) -> Trace:
                 if b.get("type") == "tool_result":
                     name, inp = pending.get(str(b.get("tool_use_id")), ("?", {}))
                     text = _flatten(b.get("content"))
-                    tr.results.append(ToolResult(name, text, _sources(name, inp, text)))
+                    query = inp.get("query") or inp.get("prompt") or ""
+                    tr.results.append(ToolResult(name, text, _sources(name, inp, text), str(query)))
         elif kind == "result":
             tr.text = ev.get("result") if isinstance(ev.get("result"), str) else last_text
             tr.usage = ev.get("usage") or {}
@@ -218,17 +258,31 @@ def verify(proposals: Sequence[Proposal], trace: Trace, words: Sequence[Word]) -
             why = "source_is_transcript"
         else:
             seen = [r for r in trace.results if _url_key(p.url) in {_url_key(u) for u, _ in r.sources}]
-            has = [r for r in seen if target in _norm(r.text + " " + " ".join(t for _, t in r.sources))]
+            has = [r for r in seen if target in _norm(r.text + " " + _titles(r))]
+            clean = [r for r in has if not any(transcript_like(u, t) for u, t in r.sources)]
             if not seen:
                 why = "url_not_seen"
             elif not has:
                 why = "not_in_search_results"
-            elif all(any(transcript_like(u, t) for u, t in r.sources) for r in has):
+            elif not clean:
                 why = "evidence_mixed_with_transcript"
+            elif not any(_shows(r, target) for r in clean):
+                why = "echo_of_query"
             else:
                 why = "ok"
         out.append((p, why))
     return out
+
+
+def _titles(r: ToolResult) -> str:
+    return " ".join(t for _, t in r.sources)
+
+
+def _shows(r: ToolResult, target: str) -> bool:
+    """도구가 이 철자를 스스로 내놓았나(verify 5): 링크 제목에 있거나, 입력에 없던 철자가 본문에 있거나."""
+    if target in _norm(_titles(r)):
+        return True
+    return target not in _norm(r.query) and target in _norm(_LINKS.sub(" ", r.text))
 
 
 @dataclass
@@ -304,3 +358,33 @@ class ClaudeSearch:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(raw, encoding="utf-8")
         return trace
+
+
+# ---------- 두 번에 걸친 검색 · 확인 ----------
+
+# 근거만 모자라 떨어진 제안 — 페이지를 직접 열면 확인될 수 있다(받아쓰기에 없는 old 같은 것은 다시 묻지 않는다)
+RETRYABLE = frozenset({"no_url", "source_is_transcript", "url_not_seen", "not_in_search_results",
+                       "evidence_mixed_with_transcript", "echo_of_query"})
+
+
+@dataclass
+class SearchRound:
+    trace: Trace
+    checked: list[tuple[Proposal, str]]
+
+
+def search_and_verify(search: ClaudeSearch, words: Sequence[Word], company: str, quarter: str = ""
+                      ) -> list[SearchRound]:
+    """1회: 통화 전체를 읽고 골라 검색. 2회(필요할 때만): 근거가 모자랐던 제안만 다시 확인.
+    두 번째 답도 두 번째 세션의 도구 결과로만 확인하고, 처음에 없던 old 는 받지 않는다('not_asked')."""
+    first = search.run(build_prompt(words, company, quarter))
+    rounds = [SearchRound(first, verify(parse_proposals(first.text), first, words))]
+    ok = {(p.old, p.new) for p, why in rounds[0].checked if why == "ok"}
+    again = list(dict.fromkeys(p for p, why in rounds[0].checked if why in RETRYABLE and (p.old, p.new) not in ok))
+    if again:
+        second = search.run(build_retry_prompt(again, company))
+        asked = {p.old for p in again}
+        checked = [(p, verify([p], second, words)[0][1] if p.old in asked else "not_asked")
+                   for p in parse_proposals(second.text)]
+        rounds.append(SearchRound(second, checked))
+    return rounds

@@ -17,6 +17,7 @@
 - LLM 답은 cache/llm/ 에 저장한다(같은 입력 → 호출 없이 같은 답).
 - --proposer search: 용어집 없이 claude -p(구독 로그인, 도구는 WebSearch · WebFetch 만)가 통화 전체에서 잘못 들은
   듯한 이름을 골라 검색하고, 검색 결과에 그 철자가 실제로 있는 것만 용어집으로 삼는다(search_fix.verify).
+  근거가 모자랐던 제안은 한 번 더 확인시킨다(search_fix.search_and_verify).
   세션 기록은 cache/llm_search/ 에 저장한다. --claude-bin 으로 claude 실행 파일을 고른다.
 
 결과: runs/earnings21/<모델>/<파일>/O1+L-<제안자>-<용어집>.json(.words.json) · reports/correction_<…>.json · .md
@@ -53,10 +54,8 @@ from callscribe.normalize import normalize_en_conventional  # noqa: E402
 from callscribe.search_fix import (  # noqa: E402
     ClaudeSearch,
     FixedEditsProposer,
-    build_prompt,
-    parse_proposals,
+    search_and_verify,
     transcript_urls,
-    verify,
 )
 from callscribe.words import RefToken, Word  # noqa: E402
 
@@ -145,17 +144,21 @@ def main() -> None:
         meta = next((m for m in company_rows(args.data) if m["file_id"] == fid), {})
         search_rec = None
         if search:
-            trace = search.run(build_prompt(words, meta.get("company_name", ""), meta.get("financial_quarter", "")))
-            checked = verify(parse_proposals(trace.text), trace, words)
-            ok = [p for p, why in checked if why == "ok"]
+            rounds = search_and_verify(search, words, meta.get("company_name", ""), meta.get("financial_quarter", ""))
+            checked = [(n, p, why) for n, rd in enumerate(rounds, 1) for p, why in rd.checked]
+            ok = list(dict.fromkeys(p for _, p, why in checked if why == "ok"))
             terms = list(dict.fromkeys(p.new for p in ok))  # 검색으로 확정한 이름 = 이 통화의 용어집
-            proposer = FixedEditsProposer([Edit(p.old, p.new, p.url) for p in ok])
-            search_rec = {"proposals": [{"old": p.old, "new": p.new, "url": p.url, "evidence": p.evidence,
-                                         "check": why} for p, why in checked],
-                          "checks": _count(why for _, why in checked),
-                          "tool_calls": _count(c["name"] for c in trace.calls),
-                          "transcript_urls": transcript_urls(trace), "turns": trace.turns,
-                          "cost_usd": trace.cost_usd, "usage": trace.usage}
+            proposer = FixedEditsProposer(list(dict.fromkeys(Edit(p.old, p.new) for p in ok)))
+            traces = [rd.trace for rd in rounds]
+            search_rec = {"proposals": [{"round": n, "old": p.old, "new": p.new, "url": p.url,
+                                         "evidence": p.evidence, "check": why} for n, p, why in checked],
+                          "checks": _count(why for n, _, why in checked if n == 1),
+                          "retry_checks": _count(why for n, _, why in checked if n == 2),
+                          "confirmed": len(ok),
+                          "tool_calls": _count(c["name"] for t in traces for c in t.calls),
+                          "transcript_urls": list(dict.fromkeys(u for t in traces for u in transcript_urls(t))),
+                          "sessions": len(traces), "turns": sum(t.turns for t in traces),
+                          "cost_usd": sum(t.cost_usd or 0 for t in traces), "usage": [t.usage for t in traces]}
         else:
             terms = call_terms(ref, args.glossary, seed=int(fid), max_terms=args.max_terms, data=args.data)
             proposer = (LLMProposer(llm, context=f"{meta.get('company_name', '')} earnings call".strip())
@@ -165,6 +168,8 @@ def main() -> None:
         after, rep = correct_entities(words, terms, proposer, risky=risky, ask_only_risky=args.ask_only_risky,
                                       common=common, risk_for_all=args.risk_for_all,
                                       shape_rules=not args.no_shape_rules)
+        if search_rec:
+            _record_rule_fates(search_rec, rep["edits"])
         before_s, after_s = scores(ref, words), scores(ref, after)
         outcome = edit_outcomes(ref, words, after, rep["mapping"], normalize_en_conventional)
         oracle_terms = call_terms(ref, "oracle", seed=0, max_terms=args.max_terms, data=args.data)
@@ -184,7 +189,8 @@ def main() -> None:
               f"{before_s['tagged']['entity']['rate']} → {after_s['tagged']['entity']['rate']} · "
               f"바꿈 {outcome['applied']} (고침 {outcome['fixed']} · 망침 {outcome['broke']}) · 제안 받은 구간 "
               f"{rep['asked']}/{rep['segments']}"
-              + (f" · 검색 제안 {len(search_rec['proposals'])} → 확정 {len(terms)} · 도구 {search_rec['tool_calls']}"
+              + (f" · 검색 제안 {sum(search_rec['checks'].values())} → 확정 {search_rec['confirmed']}"
+                 f" (다시 확인 {sum(search_rec['retry_checks'].values())}) · 도구 {search_rec['tool_calls']}"
                  f" · 전사문 주소 {len(search_rec['transcript_urls'])}" if search_rec else ""), flush=True)
     if not per_call:
         sys.exit("평가한 통화가 없다")
@@ -226,11 +232,29 @@ def _count(items) -> dict[str, int]:
     return out
 
 
+def _record_rule_fates(search_rec: dict, edit_log: list[dict]) -> None:
+    """검색으로 확정한 바꿈이 entity_fix 규칙에서 어떻게 됐나를 제안마다 'rules' 로 적는다. 후보 찾기(용어와 비슷한
+    낱말 묶음)에서 걸러져 구간에 내지도 못한 것은 'not_offered'."""
+    fate: dict[tuple[str, str], list[str]] = {}
+    for e in edit_log:
+        fate.setdefault((e["old"], e["new"]), []).append(e["decision"])
+    for item in search_rec["proposals"]:
+        if item["check"] == "ok":
+            got = fate.get((item["old"], item["new"]), [])
+            item["rules"] = "ok" if "ok" in got else (max(sorted(set(got)), key=got.count) if got else "not_offered")
+    fates = {(i["old"], i["new"]): i["rules"] for i in search_rec["proposals"] if "rules" in i}
+    search_rec["rules"] = _count(fates.values())  # 확정한 바꿈(old, new)마다 한 번
+
+
 def _search_summary(per_call: list[dict], search: ClaudeSearch) -> dict:
-    """검색 제안자 묶음 숫자(이름 · 주소는 빼고 — 통화별 기록에만 남긴다)."""
+    """검색 제안자 묶음 숫자(이름 · 주소는 빼고 — 통화별 기록에만 남긴다). checks 는 1회 제안, retry_checks 는
+    근거가 모자라 다시 물은 제안의 확인 결과, confirmed 는 두 번을 합쳐 확정한 바꿈 수."""
     recs = [r["search"] for r in per_call]
     return {"model": search.name, "sessions": search.calls, "cache_hits": search.hits,
-            "proposals": sum(len(s["proposals"]) for s in recs), "checks": _sum_dicts(s["checks"] for s in recs),
+            "proposals": sum(sum(s["checks"].values()) for s in recs), "checks": _sum_dicts(s["checks"] for s in recs),
+            "retry_checks": _sum_dicts(s["retry_checks"] for s in recs),
+            "confirmed": sum(s["confirmed"] for s in recs),
+            "rules": _sum_dicts(s.get("rules", {}) for s in recs),
             "tool_calls": _sum_dicts(s["tool_calls"] for s in recs),
             "calls_that_saw_transcripts": sum(bool(s["transcript_urls"]) for s in recs),
             "cost_usd": round(sum(s["cost_usd"] or 0 for s in recs), 2)}
