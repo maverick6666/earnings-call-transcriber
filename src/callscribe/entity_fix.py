@@ -269,7 +269,7 @@ class Decision:
     spans: list[tuple[int, int]] = field(default_factory=list)  # 구간 안 낱말 위치 [a, b)
 
 
-def _find_spans(seg: Sequence[Word], old: str) -> list[tuple[int, int]]:
+def find_spans(seg: Sequence[Word], old: str) -> list[tuple[int, int]]:
     target = key(old)
     keys = [key(w.text) for w in seg]
     out, s = [], 0
@@ -375,7 +375,7 @@ def validate(seg: Sequence[Word], edits: Sequence[Edit], glossary: Sequence[str]
         if why != "ok":
             out.append(Decision(ed, False, why))
             continue
-        spans = [sp for sp in _find_spans(seg, ed.old) if not taken & set(range(*sp))]
+        spans = [sp for sp in find_spans(seg, ed.old) if not taken & set(range(*sp))]
         if not spans:
             out.append(Decision(ed, False, "old_not_found"))
             continue
@@ -448,7 +448,7 @@ def correct_entities(words: Sequence[Word], glossary: Sequence[str], proposer: P
         cands = find_candidates(seg, glossary, max_candidates, min_candidate)
         if risky is not None and ask_only_risky:
             seg_risky = risky[a:b]
-            cands = [c for c in cands if c.present or any(seg_risky[s:e].any() for s, e in _find_spans(seg, c.old))]
+            cands = [c for c in cands if c.present or any(seg_risky[s:e].any() for s, e in find_spans(seg, c.old))]
         if not any(not c.present for c in cands):
             continue
         asked += 1
