@@ -15,6 +15,7 @@
    전사문이 아직 없으므로, 이 규칙은 평가를 실제 쓰임에 맞추는 것이다(지난 분기 전사문까지 막아 조금 불리하게 잰다).
    검색 요약은 결과 여러 개를 한데 섞어 쓴 글이라 어느 주소에서 온 철자인지 가를 수 없다 — 그래서 결과 하나에라도
    전사문이 섞이면 그 결과 전체를 근거로 쓰지 않는다. 그때는 전사문이 아닌 페이지를 따로 가져와(WebFetch) 근거로 댄다.
+   한국 회사는 통화 뒤 IR 페이지에 스크립트 · 녹취록을 올린다 — 주소에 script · 스크립트 · 녹취가 있으면 같이 막는다.
 5. 되풀이가 아니어야 한다. 검색 요약 · 가져오기 글은 도구 안의 모델이 쓴 글이라, LLM 이 검색어나 가져오기 지시에
    기억한 철자를 넣으면 그 철자를 그대로 되풀이할 수 있다. 그래서 바꿀 말이 그 도구 호출의 입력(검색어 · 지시)에
    있었다면 본문은 근거로 치지 않고, 검색 엔진이 돌려준 링크 제목에 있을 때만 인정한다.
@@ -34,7 +35,7 @@ import subprocess
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 from .entity_fix import Candidate, Edit, find_spans
 from .words import Word
@@ -76,8 +77,9 @@ Answer with JSON only, no other text:
 {{"edits": [{{"old": "...", "new": "...", "url": "...", "evidence": "short quote showing the spelling"}}]}}"""
 
 
-def build_prompt(words: Sequence[Word], company: str, quarter: str = "") -> str:
-    when = f"fiscal quarter {quarter} earnings call, held in 2020" if quarter else "earnings call"
+def build_prompt(words: Sequence[Word], company: str, quarter: str = "", when: str = "") -> str:
+    """when 을 주면 통화 설명을 그것으로(한국 콜 등). 비우면 Earnings-21(2020년 통화) 설명 — 저장된 세션과 같은 입력."""
+    when = when or (f"fiscal quarter {quarter} earnings call, held in 2020" if quarter else "earnings call")
     return f"{INSTRUCTIONS}\n\nCOMPANY: {company} ({when})\n\nTRANSCRIPT:\n" + " ".join(w.text for w in words)
 
 
@@ -200,7 +202,12 @@ def transcript_like(url: str, title: str = "") -> bool:
     host = (urlparse(url).hostname or "").lower()
     if any(host == h or host.endswith("." + h) for h in TRANSCRIPT_HOSTS):
         return True
-    return "transcript" in url.lower() or "transcript" in title.lower()
+    return bool(_SCRIPT.search(unquote(url).lower()) or _SCRIPT.search(title.lower()))
+
+
+# 'transcript' 와 회사가 올린 통화 스크립트(Samsung SDS 2025Q3_Script_Kor.pdf) · 녹취록. 'description' 은 거르지 않게
+# script 앞이 글자가 아닐 때만.
+_SCRIPT = re.compile(r"transcript|(?<![a-z])script|스크립트|녹취")
 
 
 def _url_key(url: str) -> str:
@@ -210,7 +217,7 @@ def _url_key(url: str) -> str:
 
 
 def _norm(text: str) -> str:
-    return " " + " ".join(re.sub(r"[^0-9a-z]+", " ", text.lower()).split()) + " "
+    return " " + " ".join(re.sub(r"[^0-9a-z가-힣]+", " ", text.lower()).split()) + " "
 
 
 @dataclass(frozen=True)
@@ -325,9 +332,14 @@ def _subprocess_runner(argv: list[str], stdin: str, env: dict[str, str], timeout
 
 @dataclass
 class ClaudeSearch:
-    """claude -p(구독 로그인 그대로)로 검색 세션을 돌린다. 기록 전체를 저장해 다시 돌리면 호출 없이 같은 결과."""
+    """claude -p(구독 로그인 그대로)로 검색 세션을 돌린다. 기록 전체를 저장해 다시 돌리면 호출 없이 같은 결과.
+
+    tools="" 이면 도구 없이 글만 읽고 답한다(정답 스크립트에 고유명사 표시 붙이기 같은 일).
+    """
     binary: str = "claude"
     model: str = "claude-sonnet-5-5"
+    tools: str = TOOLS
+    system_prompt: str = SYSTEM_PROMPT
     cache_dir: Path | None = None
     timeout: float = 1800.0
     runner: Runner = _subprocess_runner
@@ -339,12 +351,14 @@ class ClaudeSearch:
         return f"claude-p:{self.model}"
 
     def argv(self) -> list[str]:
+        allow = ["--allowedTools", self.tools] if self.tools else []
         return [self.binary, "-p", "--output-format", "stream-json", "--verbose", "--model", self.model,
-                "--tools", TOOLS, "--allowedTools", TOOLS, "--strict-mcp-config", "--setting-sources", "",
-                "--no-session-persistence", "--system-prompt", SYSTEM_PROMPT]
+                "--tools", self.tools, *allow, "--strict-mcp-config", "--setting-sources", "",
+                "--no-session-persistence", "--system-prompt", self.system_prompt]
 
     def run(self, prompt: str) -> Trace:
-        h = hashlib.sha256(json.dumps([self.model, SYSTEM_PROMPT, TOOLS, prompt], ensure_ascii=False).encode())
+        h = hashlib.sha256(json.dumps([self.model, self.system_prompt, self.tools, prompt],
+                                      ensure_ascii=False).encode())
         path = self.cache_dir / f"{h.hexdigest()[:24]}.jsonl" if self.cache_dir else None
         if path and path.exists():
             self.hits += 1
@@ -373,11 +387,11 @@ class SearchRound:
     checked: list[tuple[Proposal, str]]
 
 
-def search_and_verify(search: ClaudeSearch, words: Sequence[Word], company: str, quarter: str = ""
+def search_and_verify(search: ClaudeSearch, words: Sequence[Word], company: str, quarter: str = "", when: str = ""
                       ) -> list[SearchRound]:
     """1회: 통화 전체를 읽고 골라 검색. 2회(필요할 때만): 근거가 모자랐던 제안만 다시 확인.
     두 번째 답도 두 번째 세션의 도구 결과로만 확인하고, 처음에 없던 old 는 받지 않는다('not_asked')."""
-    first = search.run(build_prompt(words, company, quarter))
+    first = search.run(build_prompt(words, company, quarter, when))
     rounds = [SearchRound(first, verify(parse_proposals(first.text), first, words))]
     ok = {(p.old, p.new) for p, why in rounds[0].checked if why == "ok"}
     again = list(dict.fromkeys(p for p, why in rounds[0].checked if why in RETRYABLE and (p.old, p.new) not in ok))

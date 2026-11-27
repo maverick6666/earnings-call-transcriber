@@ -1,0 +1,30 @@
+{
+ "tag": "O1",
+ "model": "large-v3-turbo",
+ "calls": [
+  "samsungsds-2025Q3",
+  "samsungsds-2025Q4"
+ ],
+ "cer": [
+  0.45504
+ ],
+ "cer_talk": [
+  0.20741
+ ],
+ "cer_qa": [
+  0.81015
+ ],
+ "entity_error_talk": [
+  0.62454
+ ],
+ "number_error_talk": [
+  0.16434
+ ],
+ "entity_error": [
+  0.62047
+ ],
+ "number_error": [
+  0.16387
+ ],
+ "reference_entities": 128
+}
