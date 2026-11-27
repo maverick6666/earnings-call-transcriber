@@ -25,6 +25,8 @@ RLLM-CF). 그래서 RECOVER(arXiv 2603.16411)처럼 범위를 고유명사로 �
 한국어: 이름 뒤 조사가 한 낱말로 붙어 받아 적힌다('구미씨의' · '삼성 SS가'). old 의 끝 낱말 뒤에 조사(KO_PARTICLES)만
 남으면 그 자리도 old 로 찾고, 바꿀 때 조사를 새 이름 뒤에 다시 붙인다(받침에 맞춰 '이/가' · '은/는' 등을 고름).
 숫자로 받아 적힌 이름('591' → '오구일')은 자리마다 읽은 소리 · 한자어 읽기가 new 와 같을 때만 규칙 6(숫자)을 넘는다.
+회사가 영문으로 적는 이름을 한글로 받아 적은 것('브리티 코파일럿' → 'Brity Copilot')은 글자가 겹치지 않으므로,
+글자 체계가 다르면 한글을 로마자로 풀어 같은 소리 열쇠로 비교한다(cross_key).
 
 바뀐 낱말은 시각을 원래 낱말 것에서 받고, 원래 글을 `original` 에 남긴다(불변조건 2).
 제안자는 둘: FuzzyProposer(LLM 없이 가장 비슷한 후보로 바꿈 — 기준선) · LLMProposer(문맥을 보고 고름).
@@ -86,6 +88,36 @@ def phonetic_en(k: str) -> str:
     return re.sub(r"(.)\1+", r"\1", s)
 
 
+_RR_L = ("g", "kk", "n", "d", "tt", "r", "m", "b", "pp", "s", "ss", "", "j", "jj", "ch", "k", "t", "p", "h")
+# ㅡ 는 비운다 — 외래어를 한글로 적을 때 자음 사이에 끼우는 소리('브리티' = brity)
+_RR_V = ("a", "ae", "ya", "yae", "eo", "e", "yeo", "ye", "o", "wa", "wae", "oe", "yo", "u", "wo", "we", "wi", "yu",
+         "", "ui", "i")
+_RR_T = ("", "k", "k", "k", "n", "n", "n", "t", "l", "k", "m", "l", "l", "l", "p", "l", "m", "p", "p", "t", "t", "ng",
+         "t", "t", "k", "t", "p", "t")
+_LATIN = re.compile(r"[A-Za-z]")
+_KO_MERGE = str.maketrans({"f": "p", "v": "b", "l": "r", "g": "k", "d": "t", "j": "s"})
+
+
+def romanize(text: str) -> str:
+    """한글 음절을 로마자로(국어 로마자 표기를 줄인 것). 한글이 아닌 글자는 그대로."""
+    out = []
+    for ch in text:
+        code = ord(ch) - 0xAC00
+        out.append(_RR_L[code // 588] + _RR_V[(code % 588) // 28] + _RR_T[code % 28] if 0 <= code < 11172 else ch)
+    return "".join(out)
+
+
+def cross_key(text: str) -> str:
+    """글자 체계가 다른 이름을 견주는 거친 소리 열쇠: 한글은 로마자로 풀고, 영어 발음 열쇠로 바꾼 뒤 한국어가 가르지
+    않는 소리를 합친다(f·p, v·b, l·r, g·k, d·t, j·z·s). '브리티 코파일럿' · 'Brity Copilot' → 'bratakaparat'."""
+    k = phonetic_en(key(romanize(text.lower()))).translate(_KO_MERGE)
+    return re.sub(r"(.)\1+", r"\1", k)
+
+
+def _scripts(text: str) -> tuple[bool, bool]:
+    return bool(_HANGUL.search(text)), bool(_LATIN.search(text))
+
+
 def _forms(text: str) -> tuple[str, str]:
     k = key(text)
     if _HANGUL.search(k):
@@ -95,7 +127,11 @@ def _forms(text: str) -> tuple[str, str]:
 
 
 def similarity(a: str, b: str) -> float:
-    """글자 유사도와 발음 열쇠 유사도의 평균(0~1). 한국어는 자모로 비교한다."""
+    """글자 유사도와 발음 열쇠 유사도의 평균(0~1). 한국어는 자모로 비교한다.
+    글자 체계가 다르면('브리티 코파일럿' · 'Brity Copilot', '엑센터' · 'AX센터') 소리 열쇠(cross_key)끼리만 비교한다."""
+    if _scripts(a) != _scripts(b):
+        xa, xb = cross_key(a), cross_key(b)
+        return difflib.SequenceMatcher(None, xa, xb, autojunk=False).ratio() if xa and xb else 0.0
     (ca, pa), (cb, pb) = _forms(a), _forms(b)
     if not ca or not cb:
         return 0.0

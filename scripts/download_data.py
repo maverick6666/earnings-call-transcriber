@@ -73,6 +73,7 @@ def models() -> None:
 
 SDS_IR = "https://www.samsungsds.com/kr/investor/ir_events/earnings-release.html"
 SDS_HLS = "https://replay.teletogether.com/aod/_definst/mp4:samsungsds/samsungsds{}_kor.m4a/playlist.m3u8"
+SDS_REPLAY = "https://irsvc.teletogether.com/samsungsds/samsungsds{}_kor.php"
 
 
 def sds_links() -> dict[str, dict[str, str]]:
@@ -116,8 +117,32 @@ def save_stream_audio(url: str, dest: Path) -> float:
     return sf.info(str(dest)).duration
 
 
+def replay_schedule(quarter: str) -> str:
+    """다시 듣기 페이지의 일정 · 발표자 · 참석 임원(글만). 첫 페이지가 쿠키를 심고 실제 페이지로 보낸다."""
+    import http.cookiejar
+    from html import unescape
+
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+    first = opener.open(urllib.request.Request(SDS_REPLAY.format(quarter), headers=UA), timeout=60).read()
+    m = re.search(r'href = "(/samsungsds/samsungsds\.php\?c=samsungsds&y=\d+)"', first.decode("utf-8", "replace"))
+    if not m:
+        raise SystemExit(f"{quarter}: 다시 듣기 페이지 모양이 바뀌었다")
+    html = opener.open(urllib.request.Request(urljoin(SDS_REPLAY, m.group(1)), headers=UA), timeout=60).read()
+    text = re.sub(r"<script.*?</script>|<style.*?</style>", " ", html.decode("utf-8", "replace"), flags=re.S)
+    text = re.sub(r"\s+", " ", unescape(re.sub(r"<[^>]+>", " ", text)).replace("\u3000", " ").replace("\u2003", " "))
+    a, b = text.find("Detailed Schedule"), text.find("MEDIA PLAYER")
+    return text[a:b if b > a else None].strip() if a >= 0 else text.strip()
+
+
+def _previous(quarter: str) -> str:
+    year, q = int(quarter[:4]), int(quarter[-1])
+    return f"{year - 1}Q4" if q == 1 else f"{year}Q{q - 1}"
+
+
 def krcalls(*quarters: str) -> None:
-    """삼성SDS 실적 콜: data/krcalls/samsungsds/<분기>/ 에 audio.flac · script.pdf · deck.pdf."""
+    """삼성SDS 실적 콜: data/krcalls/samsungsds/<분기>/ 에 audio.flac · script.pdf(정답) · deck.pdf 와
+    materials/ — 통화 전에 공개된 자료(발표자료와 같은 날 · 다시 듣기 페이지의 참석자 명단 · 지난 분기 스크립트).
+    교정기는 materials/ 와 deck.pdf 만 본다. script.pdf 는 채점에만 쓴다."""
     links = sds_links()
     for q in quarters or sorted(links):
         if q not in links or set(links[q]) != {"deck", "script"}:
@@ -126,6 +151,12 @@ def krcalls(*quarters: str) -> None:
         fetch(links[q]["script"], out / "script.pdf")
         fetch(links[q]["deck"], out / "deck.pdf")
         sec = save_stream_audio(SDS_HLS.format(q), out / "audio.flac")
+        materials = out / "materials"
+        materials.mkdir(exist_ok=True)
+        if not (materials / "schedule.txt").exists():
+            (materials / "schedule.txt").write_text(replay_schedule(q), encoding="utf-8")
+        if links.get(_previous(q), {}).get("script"):
+            fetch(links[_previous(q)]["script"], materials / "previous_script.pdf")
         (out / "source.json").write_text(json.dumps({"company": "Samsung SDS", "quarter": q, "language": "ko",
                                                      "audio": SDS_HLS.format(q), **links[q]}, indent=1),
                                          encoding="utf-8")
