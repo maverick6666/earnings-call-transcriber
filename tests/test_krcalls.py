@@ -102,3 +102,10 @@ def test_runner_without_tools_and_search_cache_key_unchanged(tmp_path):
     ClaudeSearch(cache_dir=tmp_path, runner=fake).run("hello")
     old_key = hashlib.sha256(json.dumps(["claude-sonnet-5-5", SYSTEM_PROMPT, TOOLS, "hello"]).encode()).hexdigest()
     assert (tmp_path / f"{old_key[:24]}.jsonl").exists()  # 저장해 둔 영어 검색 세션을 그대로 다시 쓴다
+
+
+def test_page_numbers_inside_the_script_are_not_reference_text():
+    text = "안녕하십니까?\n매출은 3조\n - 19 - \n원입니다.\n감사합니다."
+    assert read_kr_script(text) == [("talk", "안녕하십니까? 매출은 3조 원입니다. 감사합니다.")]
+    older = "1/24\n삼성SDS 2024년 2분기 컨퍼런스 콜\n안녕하십니까?\n2/24\n감사합니다."  # 쪽 번호가 제목 앞에
+    assert read_kr_script(older) == [("talk", "안녕하십니까? 감사합니다.")]

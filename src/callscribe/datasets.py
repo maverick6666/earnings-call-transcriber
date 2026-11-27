@@ -113,6 +113,7 @@ _KR_LABEL = re.compile(r"(?:Q|A\d*)\.\s.*|\[.*\]|[^,]{2,40},\s*[가-힣]{2,4}\s*
                        r"(?:상무|전무|부사장|사장|부회장|이사|위원|팀장|실장|센터장|본부장|연구원|애널리스트)")
 _KR_QA = re.compile(r"\[\s*Q\s*&\s*A.*\]")
 _KR_TITLE = re.compile(r".*컨퍼런스\s*콜")
+_KR_PAGE = re.compile(r"-\s*\d+\s*-|\d+\s*/\s*\d+")  # 본문에 섞인 쪽 번호('- 19 -' · '1/24')
 # 숫자 + 붙은 단위('3조' · '3,913억원' · '0.3%p' · '23,300여개사'). 뒤 조사('으로' 등)는 숫자 꼬리표에 넣지 않는다.
 KR_NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?(?:%p|%|여|조|억|만|천|백|원|개사|개|명|배|년|분기|월|일|위|건|곳|p)*")
 
@@ -123,9 +124,9 @@ def read_kr_script(text: str) -> list[tuple[str, str]]:
     out: list[tuple[str, str]] = []
     section, buf = "talk", []
     lines = [line.strip() for line in text.splitlines()]
-    first = next((k for k, line in enumerate(lines) if line), len(lines))
-    if first < len(lines) and _KR_TITLE.fullmatch(lines[first]):
-        lines[first] = ""
+    title = next((k for k, line in enumerate(lines) if line and not _KR_PAGE.fullmatch(line)), len(lines))
+    if title < len(lines) and _KR_TITLE.fullmatch(lines[title]):
+        lines[title] = ""  # 제목 줄(쪽 번호가 앞에 올 수 있다)
 
     def flush() -> None:
         if buf:
@@ -136,6 +137,8 @@ def read_kr_script(text: str) -> list[tuple[str, str]]:
         if _KR_QA.fullmatch(line):
             flush()
             section = "qa"
+        elif _KR_PAGE.fullmatch(line):
+            continue  # 쪽 번호는 말한 것이 아니고 문장 중간에 끼므로 문단을 끊지 않는다
         elif not line or _KR_LABEL.fullmatch(line):
             flush()
         else:

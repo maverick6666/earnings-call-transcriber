@@ -198,21 +198,26 @@ def glue_number_pieces(words: list[Word]) -> list[Word]:
 
 
 def sections(ref: list[RefToken], words: list[Word]) -> dict:
-    """발표 · 질의응답 부분별 CER · 고유명사 · 숫자 오류. CER 은 끼어든 글자를 바로 앞 정답 글자의 부분으로 세고,
-    고유명사 · 숫자는 꼬리표 달린 정답 글자가 틀리거나 빠진 것만 센다(metrics.tagged_error 와 같은 셈)."""
+    """발표 · 질의응답 부분별 오류. 고유명사 · 숫자는 꼬리표 달린 정답 글자가 틀리거나 빠진 비율
+    (metrics.tagged_error 와 같은 셈).
+
+    글자는 둘로 센다. cer = (바꿈 + 빠짐 + 끼어듦) ÷ 정답 글자(끼어든 글자는 바로 앞 정답 글자의 부분으로),
+    miss = (바꿈 + 빠짐) ÷ 정답 글자. 회사 스크립트에는 사회자 말이 없고, 분기에 따라 읽지 않은 문단이 있거나
+    질의응답이 통째로 빠져(2026년 2분기) 끼어듦은 받아쓰기보다 정답 탓이 크다 — 그래서 본문 숫자는 miss 로 쓴다."""
     ref_t = [(ch, "qa" if "QA" in r.tags else "talk", set(r.tags)) for r in ref for ch in ko_norm(r.text)]
     hyp_t = [ch for w in words for ch in ko_norm(w.text)]
-    count = {part: {g: [0, 0] for g in ("cer", "entity", "number")} for part in ("talk", "qa")}
+    count = {part: {g: [0, 0] for g in ("cer", "miss", "entity", "number")} for part in ("talk", "qa")}
     part = "talk"
     for op, i, _ in align([c for c, _, _ in ref_t], hyp_t):
         if i is not None:
             part, tags = ref_t[i][1], ref_t[i][2]
-            count[part]["cer"][0] += 1
-            for g, hit in (("entity", tags & metrics.ENTITY_TAGS), ("number", tags & metrics.NUMBER_TAGS)):
+            for g, hit in (("cer", True), ("miss", True), ("entity", tags & metrics.ENTITY_TAGS),
+                           ("number", tags & metrics.NUMBER_TAGS)):
                 if hit:
                     count[part][g][0] += 1
                     count[part][g][1] += op in ("S", "D")
-        count[part]["cer"][1] += op != "C"
+        else:
+            count[part]["cer"][1] += 1
     return {part: {g: {"ref": n, "errors": e, "rate": round(e / n, 5) if n else None} for g, (n, e) in gs.items()}
             for part, gs in count.items()}
 
@@ -307,12 +312,13 @@ def _search(search: ClaudeSearch, words: list[Word], folder: Path) -> tuple[dict
 def _line(name: str, rec: dict) -> str:
     b = rec["before"]
     talk = b["sections"]["talk"]
-    line = (f"{name}: 발표 부분 CER {talk['cer']['rate']} · 고유명사 {talk['entity']['rate']} · 숫자 "
-            f"{talk['number']['rate']} (전체 고유명사 {b['tagged']['entity']['rate']} · 숫자 "
+    line = (f"{name}: 발표 부분 CER {talk['cer']['rate']} · 틀림 · 빠짐 {talk['miss']['rate']} · 고유명사 "
+            f"{talk['entity']['rate']} · 숫자 {talk['number']['rate']} "
+            f"(전체 고유명사 {b['tagged']['entity']['rate']} · 숫자 "
             f"{b['tagged']['number']['rate']})")
     if "after" in rec:
         a, o = rec["after"], rec["outcome"]
-        line += (f" → 교정 뒤 발표 CER {a['sections']['talk']['cer']['rate']} · 고유명사 "
+        line += (f" → 교정 뒤 발표 틀림 · 빠짐 {a['sections']['talk']['miss']['rate']} · 고유명사 "
                  f"{a['sections']['talk']['entity']['rate']} (전체 {a['tagged']['entity']['rate']}) · "
                  f"바꿈 {o['applied']} (고침 {o['fixed']} · 망침 {o['broke']})")
         for src, label in (("materials", "자료"), ("search", "검색")):
@@ -337,6 +343,7 @@ def _report(args: argparse.Namespace, tag: str, per_call: list[dict], search: Cl
         "cer": [pooled(s, lambda x: x["overall"]) for s in sides],
         "cer_talk": [pooled(s, lambda x: x["sections"]["talk"]["cer"]) for s in sides],
         "cer_qa": [pooled(s, lambda x: x["sections"]["qa"]["cer"]) for s in sides],
+        "miss_talk": [pooled(s, lambda x: x["sections"]["talk"]["miss"]) for s in sides],
         "entity_error_talk": [pooled(s, lambda x: x["sections"]["talk"]["entity"]) for s in sides],
         "number_error_talk": [pooled(s, lambda x: x["sections"]["talk"]["number"]) for s in sides],
         "entity_error": [pooled(s, lambda x: x["tagged"]["entity"]) for s in sides],
