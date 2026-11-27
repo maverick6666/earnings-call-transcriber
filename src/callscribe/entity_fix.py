@@ -9,7 +9,8 @@ RLLM-CF). 그래서 RECOVER(arXiv 2603.16411)처럼 범위를 고유명사로 �
 1. 바꿀 말(new)은 용어집에 있어야 한다. 표기는 용어집 것을 쓴다.
 2. 원래 말(old)은 그 구간 받아쓰기에 실제로 있어야 한다(낱말 단위로 찾고, 띄어쓰기 차이는 허용 — 'cy tiva').
 3. 대소문자 · 띄어쓰기만 다른 바꿈은 버린다(점수에 안 잡히고 표기만 흔든다).
-4. old 와 new 가 글자 · 발음으로 충분히 비슷해야 한다(MIN_SIMILARITY, 3글자 이하 약어는 SHORT_MIN_SIMILARITY).
+4. old 와 new 가 글자 · 발음으로 충분히 비슷해야 한다(MIN_SIMILARITY, 3글자 이하 약어는 SHORT_MIN_SIMILARITY —
+   한글 이름은 세 글자도 자모 7~9개라 약어 규칙을 쓰지 않는다).
    'citeva → Cytiva' 는 되고 'star → Cytiva' 는 안 된다.
 5. old 가 이미 용어집에 있는 다른 이름이면 버린다(맞는 이름을 다른 이름으로 바꾸는 사고).
 6. 모양만 바꾸는 편집은 버린다 — 낱말 더하기 · 빼기('financial → Voya Financial'), 붙은 조각 더하기 · 빼기
@@ -20,6 +21,10 @@ RLLM-CF). 그래서 RECOVER(arXiv 2603.16411)처럼 범위를 고유명사로 �
    old 가 모두 흔한 낱말('as → ASA', 'at → AT&T', 'in video → Nvidia')이거나 new 가 흔한 낱말 하나('operating →
    Operations')인 경우다. 정답 글에 걸어 본 실험에서 과교정 대부분이 이 모양이었다(reports/review_layer.md).
 8. old 는 MAX_OLD 낱말 이하. 겹치는 편집은 먼저 온 것만.
+
+한국어: 이름 뒤 조사가 한 낱말로 붙어 받아 적힌다('구미씨의' · '삼성 SS가'). old 의 끝 낱말 뒤에 조사(KO_PARTICLES)만
+남으면 그 자리도 old 로 찾고, 바꿀 때 조사를 새 이름 뒤에 다시 붙인다(받침에 맞춰 '이/가' · '은/는' 등을 고름).
+숫자로 받아 적힌 이름('591' → '오구일')은 자리마다 읽은 소리 · 한자어 읽기가 new 와 같을 때만 규칙 6(숫자)을 넘는다.
 
 바뀐 낱말은 시각을 원래 낱말 것에서 받고, 원래 글을 `original` 에 남긴다(불변조건 2).
 제안자는 둘: FuzzyProposer(LLM 없이 가장 비슷한 후보로 바꿈 — 기준선) · LLMProposer(문맥을 보고 고름).
@@ -38,6 +43,7 @@ import numpy as np
 
 from .detect import key, word_labels
 from .llm import LLM
+from .normalize import sino_korean
 from .words import RefToken, Word
 
 MIN_SIMILARITY = 0.6
@@ -267,20 +273,67 @@ class Decision:
     why: str
     new: str = ""  # 용어집 표기
     spans: list[tuple[int, int]] = field(default_factory=list)  # 구간 안 낱말 위치 [a, b)
+    particles: list[str] = field(default_factory=list)  # spans 마다 끝 낱말에 붙어 있던 한국어 조사('' = 없음)
 
 
-def find_spans(seg: Sequence[Word], old: str) -> list[tuple[int, int]]:
+# 이름 뒤에 붙어 한 낱말로 받아 적히는 조사 · 붙는 말.
+KO_PARTICLES = frozenset({
+    "이", "가", "은", "는", "을", "를", "의", "에", "에서", "에게", "께", "께서", "와", "과", "도", "로", "으로",
+    "만", "까지", "부터", "보다", "처럼", "이나", "나", "이랑", "랑", "에는", "에서는", "으로는", "로는", "에도",
+    "와는", "과는", "와의", "과의", "에서의", "으로서", "로서", "이라는", "라는", "이라고", "라고", "이고", "이며",
+    "이다", "입니다", "님", "님이", "님은", "님의", "님께서", "님께"})
+# (받침 있는 말 뒤, 없는 말 뒤)
+_ALLOMORPHS = (("이", "가"), ("은", "는"), ("을", "를"), ("과", "와"), ("으로", "로"), ("이나", "나"), ("이랑", "랑"),
+               ("으로는", "로는"), ("으로서", "로서"), ("과는", "와는"), ("과의", "와의"), ("이라는", "라는"),
+               ("이라고", "라고"))
+
+
+def split_particle(text: str) -> tuple[str, str]:
+    """'삼성 SS가' → ('삼성 SS', '가'). 끝이 한국어 조사가 아니면 (text, '')."""
+    stripped = text.rstrip()
+    for n in range(min(5, len(stripped) - 1), 0, -1):
+        tail = stripped[-n:]
+        if tail in KO_PARTICLES and stripped[:-n].strip() and not stripped[-n - 1].isspace():
+            return stripped[:-n], tail
+    return text, ""
+
+
+def same_particle(a: str, b: str) -> bool:
+    """같은 조사이거나 받침에 따라 바뀐 짝('이' · '가')인가."""
+    return bool(a) and (a == b or any({a, b} == set(pair) for pair in _ALLOMORPHS))
+
+
+def attach_particle(name: str, particle: str) -> str:
+    """조사를 새 이름 뒤에 붙인다. 이름이 한글로 끝나면 받침에 맞춰 '이/가' 등을 고른다(라틴 글자 뒤는 그대로)."""
+    if not particle:
+        return name
+    last = name.rstrip()[-1:]
+    code = ord(last) - 0xAC00 if last else -1
+    if 0 <= code < 11172:
+        batchim = code % 28 != 0
+        for with_b, without_b in _ALLOMORPHS:
+            if particle in (with_b, without_b):
+                particle = with_b if batchim else without_b
+                break
+    return name + particle
+
+
+def match_spans(seg: Sequence[Word], old: str) -> list[tuple[int, int, str]]:
+    """old 가 든 낱말 위치 [a, b) 와, 끝 낱말에서 old 뒤에 남은 한국어 조사(없으면 '')."""
     target = key(old)
     keys = [key(w.text) for w in seg]
     out, s = [], 0
     while s < len(seg):
         hit = None
-        if keys[s]:
+        if keys[s] and target:
             joined = ""
             for e in range(s, min(len(seg), s + MAX_OLD + 1)):
                 joined += keys[e]
                 if joined == target:
-                    hit = (s, e + 1)
+                    hit = (s, e + 1, "")
+                    break
+                if joined.startswith(target) and joined[len(target):] in KO_PARTICLES:
+                    hit = (s, e + 1, joined[len(target):])
                     break
                 if not target.startswith(joined):
                     break
@@ -290,6 +343,10 @@ def find_spans(seg: Sequence[Word], old: str) -> list[tuple[int, int]]:
         else:
             s += 1
     return out
+
+
+def find_spans(seg: Sequence[Word], old: str) -> list[tuple[int, int]]:
+    return [(a, b) for a, b, _ in match_spans(seg, old)]
 
 
 def common_vocabulary(docs: Iterable[Iterable[str]], min_docs: int = 3) -> set[str]:
@@ -310,6 +367,21 @@ def _numberish(token: str) -> bool:
     return bool(re.search(r"\d", core)) or bool(_ROMAN.fullmatch(core))
 
 
+def _min_sim(new_key: str, min_sim: float) -> float:
+    """3글자 이하 약어('SCP')는 더 엄하게. 한글은 음절 셋이 자모 7~9개라 약어 규칙을 쓰지 않는다."""
+    return SHORT_MIN_SIMILARITY if len(new_key) <= 3 and not _HANGUL.search(new_key) else min_sim
+
+
+_KO_DIGITS = "영일이삼사오육칠팔구"
+
+
+def _reads_as_digits(old_key: str, new_key: str) -> bool:
+    """old 가 숫자뿐이고 new(한글)가 그 숫자를 자리마다 읽은 소리('591' → 오구일)나 한자어 읽기와 같은가."""
+    if not old_key.isdigit() or len(old_key) > 6 or not _HANGUL.match(new_key):
+        return False
+    return new_key in {"".join(_KO_DIGITS[int(d)] for d in old_key), sino_korean(int(old_key))}
+
+
 def _check(old: str, new: str, canon: dict[str, str], common: Set[str], min_sim: float,
            shape_rules: bool = True) -> tuple[str, bool]:
     """규칙 2 · 5~8 과 유사도. (이유, 흔한 낱말이라 위험 근거가 필요한가). 이유가 'ok' 면 통과.
@@ -324,8 +396,10 @@ def _check(old: str, new: str, canon: dict[str, str], common: Set[str], min_sim:
         return "old_is_known_name", False
     if len(old_toks) > MAX_OLD:
         return "old_too_long", False
+    if _reads_as_digits(ko, kn):
+        return "ok", False  # 숫자로 받아 적힌 한국 이름('591' → '오구일')
     if not shape_rules:
-        if similarity(old, new) < (SHORT_MIN_SIMILARITY if len(kn) <= 3 else min_sim):
+        if similarity(old, new) < _min_sim(kn, min_sim):
             return "not_similar", False
         old_k, new_k = [key(t) for t in old_toks], [key(t) for t in new.split() if key(t)]
         return "ok", bool(common) and (all(k in common for k in old_k) or (len(new_k) == 1 and new_k[0] in common))
@@ -346,7 +420,7 @@ def _check(old: str, new: str, canon: dict[str, str], common: Set[str], min_sim:
     if any(_numberish(t) for t in res_old):
         return "touches_number", False  # 받아 적은 숫자 · 로마 숫자는 건드리지 않는다('Phase III')
     ro, rn = " ".join(res_old), " ".join(res_new)
-    if similarity(ro, rn) < (SHORT_MIN_SIMILARITY if len(key(rn)) <= 3 else min_sim):
+    if similarity(ro, rn) < _min_sim(key(rn), min_sim):
         return "not_similar", False  # 겹치는 낱말이 있으면 나머지끼리 비교('Eversource in → Eversource Energy')
     res_old_k, res_new_k = [key(t) for t in res_old], [key(t) for t in res_new]
     needs_risk = bool(common) and (all(k in common for k in res_old_k)
@@ -375,18 +449,18 @@ def validate(seg: Sequence[Word], edits: Sequence[Edit], glossary: Sequence[str]
         if why != "ok":
             out.append(Decision(ed, False, why))
             continue
-        spans = [sp for sp in find_spans(seg, ed.old) if not taken & set(range(*sp))]
-        if not spans:
+        found = [sp for sp in match_spans(seg, ed.old) if not taken & set(range(sp[0], sp[1]))]
+        if not found:
             out.append(Decision(ed, False, "old_not_found"))
             continue
         if needs_risk or risk_for_all:
-            spans = [sp for sp in spans if risky is not None and risky[sp[0]:sp[1]].any()]
-            if not spans:
+            found = [sp for sp in found if risky is not None and risky[sp[0]:sp[1]].any()]
+            if not found:
                 out.append(Decision(ed, False, "common_words_without_risk"))
                 continue
-        for sp in spans:
-            taken |= set(range(*sp))
-        out.append(Decision(ed, True, "ok", new, spans))
+        for a, b, _ in found:
+            taken |= set(range(a, b))
+        out.append(Decision(ed, True, "ok", new, [(a, b) for a, b, _ in found], [pt for _, _, pt in found]))
     return out
 
 
@@ -445,12 +519,18 @@ def correct_entities(words: Sequence[Word], glossary: Sequence[str], proposer: P
     reasons: dict[str, int] = {}
     for n, (a, b) in enumerate(segs):
         seg = words[a:b]
-        cands = find_candidates(seg, glossary, max_candidates, min_candidate)
-        if risky is not None and ask_only_risky:
-            seg_risky = risky[a:b]
-            cands = [c for c in cands if c.present or any(seg_risky[s:e].any() for s, e in find_spans(seg, c.old))]
-        if not any(not c.present for c in cands):
-            continue
+        if getattr(proposer, "needs_candidates", True):
+            cands = find_candidates(seg, glossary, max_candidates, min_candidate)
+            if risky is not None and ask_only_risky:
+                seg_risky = risky[a:b]
+                cands = [c for c in cands
+                         if c.present or any(seg_risky[s:e].any() for s, e in find_spans(seg, c.old))]
+            if not any(not c.present for c in cands):
+                continue
+        else:  # 바꿈을 이미 정해 온 제안자(검색 확정): 후보 찾기 없이 그 old 가 든 구간만
+            cands = []
+            if not proposer.propose(seg, cands):
+                continue
         asked += 1
         decisions = validate(seg, proposer.propose(seg, cands), glossary, min_sim, common=common,
                              risky=None if risky is None else risky[a:b], risk_for_all=risk_for_all,
@@ -460,7 +540,8 @@ def correct_entities(words: Sequence[Word], glossary: Sequence[str], proposer: P
             log.append({"segment": [round(words[a].start, 2), round(words[b - 1].end, 2)], "old": d.edit.old,
                         "new": d.edit.new, "reason": d.edit.reason, "decision": d.why,
                         "occurrences": len(d.spans)})
-            changes.extend((a + s, a + e, d.new) for s, e in d.spans)
+            changes.extend((a + s, a + e, attach_particle(d.new, pt))
+                           for (s, e), pt in zip(d.spans, d.particles, strict=True))
         if progress:
             progress(n + 1, len(segs))
     out, mapping = apply_spans(words, changes)

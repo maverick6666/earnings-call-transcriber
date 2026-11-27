@@ -37,7 +37,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-from .entity_fix import Candidate, Edit, find_spans
+from .entity_fix import Candidate, Edit, find_spans, same_particle, split_particle
 from .words import Word
 
 # 전사문 · 평가 자료를 싣는 곳. 그 밖의 곳은 주소나 제목에 'transcript' 가 있으면 전사문으로 본다.
@@ -241,9 +241,16 @@ def parse_proposals(text: str) -> list[Proposal]:
     out = []
     for it in items if isinstance(items, list) else []:
         if isinstance(it, dict) and isinstance(it.get("old"), str) and isinstance(it.get("new"), str):
-            out.append(Proposal(it["old"].strip(), it["new"].strip(), str(it.get("url", "")).strip(),
-                                str(it.get("evidence", ""))[:300]))
+            old, new = _drop_shared_particle(it["old"].strip(), it["new"].strip())
+            out.append(Proposal(old, new, str(it.get("url", "")).strip(), str(it.get("evidence", ""))[:300]))
     return out
+
+
+def _drop_shared_particle(old: str, new: str) -> tuple[str, str]:
+    """한국어 제안은 조사까지 붙여 오기도 한다('삼성 SS가' → '삼성 SDS가'). 둘 다 같은 조사로 끝나면 떼어, 근거에서는
+    이름만 찾고 받아쓰기에서는 조사 붙은 낱말도 찾게 한다(바꿀 때 entity_fix 가 조사를 다시 붙임)."""
+    (old_stem, old_p), (new_stem, new_p) = split_particle(old), split_particle(new)
+    return (old_stem, new_stem) if same_particle(old_p, new_p) else (old, new)
 
 
 def transcript_urls(trace: Trace) -> list[str]:
@@ -294,9 +301,12 @@ def _shows(r: ToolResult, target: str) -> bool:
 
 @dataclass
 class FixedEditsProposer:
-    """검색으로 확정한 바꿈 목록을 구간마다 그 구간에 든 것만 낸다(받아들일지는 entity_fix.validate 가 정한다)."""
+    """검색으로 확정한 바꿈 목록을 구간마다 그 구간에 든 것만 낸다(받아들일지는 entity_fix.validate 가 정한다).
+    바꿈을 이미 정해 왔으므로 용어집 후보 찾기를 거치지 않는다(needs_candidates) — 맞는 이름이 같은 구간에 이미
+    그대로 있으면 후보 찾기가 '고칠 것 없음' 으로 보고 구간을 건너뛰던 문제."""
     edits: Sequence[Edit]
     name: str = "search"
+    needs_candidates: bool = False
 
     def propose(self, seg: Sequence[Word], candidates: Sequence[Candidate]) -> list[Edit]:
         return [e for e in self.edits if find_spans(seg, e.old)]
