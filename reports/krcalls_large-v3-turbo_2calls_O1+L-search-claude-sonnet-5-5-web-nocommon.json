@@ -7,19 +7,19 @@
  ],
  "cer": [
   0.45504,
-  0.45437
+  0.45335
  ],
  "cer_talk": [
   0.20741,
-  0.20688
+  0.20568
  ],
  "cer_qa": [
   0.81015,
-  0.8093
+  0.80853
  ],
  "entity_error_talk": [
   0.62454,
-  0.61586
+  0.59727
  ],
  "number_error_talk": [
   0.16434,
@@ -27,7 +27,7 @@
  ],
  "entity_error": [
   0.62047,
-  0.60981
+  0.59417
  ],
  "number_error": [
   0.16387,
@@ -35,37 +35,37 @@
  ],
  "reference_entities": 128,
  "outcome": {
-  "fixed": 8,
+  "fixed": 20,
   "broke": 0,
-  "still_wrong": 20,
-  "neutral": 1,
-  "applied": 29
+  "still_wrong": 36,
+  "neutral": 2,
+  "applied": 58
  },
  "edits_in_script": {
-  "applied_pairs": 20,
-  "new_in_script": 14,
-  "old_in_script": 0
+  "applied_pairs": 38,
+  "new_in_script": 30,
+  "old_in_script": 1
+ },
+ "decisions": {
+  "ok": 51,
+  "not_similar": 6
  },
  "search": {
   "model": "claude-p:claude-sonnet-5-5",
-  "sessions": 0,
-  "cache_hits": 3,
+  "sessions": 1,
+  "cache_hits": 2,
   "proposals": 52,
-  "confirmed": 29,
+  "confirmed": 44,
   "checks": {
-   "ok": 29,
-   "old_not_in_transcript": 14,
-   "not_in_search_results": 9
+   "ok": 42,
+   "not_in_search_results": 9,
+   "echo_of_query": 1
   },
   "retry_checks": {
-   "not_in_search_results": 9
-  },
-  "decisions": {
-   "ok": 27,
-   "touches_number": 1,
-   "not_similar": 9
+   "not_in_search_results": 8,
+   "ok": 2
   },
   "calls_that_saw_scripts": 2,
-  "cost_usd": 1.51
+  "cost_usd": 1.49
  }
 }

@@ -3,6 +3,7 @@
     .venv/Scripts/python scripts/eval_krcalls.py transcribe --model large-v3-turbo
     .venv/Scripts/python scripts/eval_krcalls.py score --model large-v3-turbo
     .venv/Scripts/python scripts/eval_krcalls.py score --model large-v3-turbo --proposer search --claude-bin <claude>
+    .venv/Scripts/python scripts/eval_krcalls.py score --strategy O1R --proposer both --claude-bin <claude>
 
 - 정답은 회사가 낸 스크립트다. 발표 부분은 거의 말한 그대로지만 질의응답은 다듬어 줄인 글이고, 사회자 안내 ·
   화자 꼬리표는 없다(datasets.read_kr_script). 그래서 글자 오류율(CER)은 발표 부분과 질의응답을 나눠 싣는다.
@@ -15,6 +16,8 @@
   읽으면 '삼구백십삼억' 이 되므로 채점 전에 붙인다(glue_number_pieces). 받아쓰기 자체는 바꾸지 않는다.
 - --proposer search: 영어와 같은 검색 확인 교정(search_fix)을 그대로 건다. 회사가 올린 스크립트 · 녹취록은 근거에서
   막는다(search_fix.transcript_like). 흔한 낱말 규칙(7)은 지난 통화 묶음이 없어 끈다.
+- --proposer materials: 통화 전에 공개된 회사 자료(그 분기 발표자료 · 다시 듣기 페이지의 참석자 명단 · 지난 분기
+  스크립트)에 적힌 표기로만 고친다(materials_fix). both: 자료 → 검색 순(같은 old 는 자료 쪽).
 
 결과: runs/krcalls/<모델>/<통화>/O1.json(받아쓰기 기록) · O1.words.json · O1.score.json(채점) · O1+L-<…>.json(교정)
 · reports/krcalls_<모델>_<…>.json
@@ -34,13 +37,13 @@ from pathlib import Path
 import soundfile as sf
 
 from callscribe import align as align_module
-from callscribe import chunking, metrics, runner
+from callscribe import chunking, materials_fix, metrics, runner
 from callscribe.align import align
 from callscribe.backends import SAMPLE_RATE, FasterWhisperASR, speech_energy
 from callscribe.datasets import kr_reference, read_kr_script
-from callscribe.entity_fix import Edit, correct_entities, edit_outcomes
+from callscribe.entity_fix import Edit, correct_entities, edit_outcomes, key
 from callscribe.normalize import normalize_ko_conventional
-from callscribe.search_fix import ClaudeSearch, FixedEditsProposer, search_and_verify, transcript_urls
+from callscribe.search_fix import ClaudeSearch, FixedEditsProposer, Proposal, search_and_verify, transcript_urls
 from callscribe.words import RefToken, Word
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -56,6 +59,7 @@ def call_hint(folder: Path) -> str:
     """O1R 이 뭉개진 창에 마지막으로 주는 통화 설명. 회사 이름과 분기만(스크립트 내용은 쓰지 않는다)."""
     q = folder.name  # 2025Q3
     return f"{COMPANY_KO.get(folder.parent.name, folder.parent.name)} {q[:4]}년 {q[-1]}분기 실적발표 컨퍼런스콜입니다."
+
 
 TAG_SYSTEM = "You extract named entities from Korean business text. Follow the user message. Do not use tools."
 TAG_PROMPT = """아래는 한국 회사의 실적발표 컨퍼런스콜 스크립트다. 이 글에 나오는 고유명사를 빠짐없이, 글에 적힌 철자 \
@@ -117,9 +121,23 @@ def transcribe(args: argparse.Namespace) -> None:
 # ---------- 정답 ----------
 
 def script_text(folder: Path) -> str:
+    return pdf_text(folder / "script.pdf")
+
+
+def pdf_text(path: Path) -> str:
     from pypdf import PdfReader  # 한국 콜 평가에만 쓰는 선택 의존성
 
-    return "\n".join(page.extract_text() or "" for page in PdfReader(str(folder / "script.pdf")).pages)
+    return "\n".join(page.extract_text() or "" for page in PdfReader(str(path)).pages)
+
+
+def materials_text(folder: Path) -> str:
+    """교정기가 보는 회사 자료: 그 분기 발표자료 · 참석자 명단 · 지난 분기 스크립트(모두 통화 전에 공개)."""
+    parts = [pdf_text(folder / "deck.pdf")]
+    for name in ("schedule.txt", "previous_script.pdf"):
+        path = folder / "materials" / name
+        if path.exists():
+            parts.append(path.read_text(encoding="utf-8") if path.suffix == ".txt" else pdf_text(path))
+    return "\n\n".join(parts)
 
 
 def script_paragraphs(folder: Path) -> list[tuple[str, str]]:
@@ -203,11 +221,17 @@ def score(args: argparse.Namespace) -> None:
     # (B1 2025Q3: 띠 오류 9,381 · 전체 6,479). 글자 2만 개 안팎이라 전체 정렬로 센다(통화당 수십 초 · 수백 MB).
     align_module.FULL_LIMIT = 10**9
     runs = RUNS / args.model
-    tagger = ClaudeSearch(binary=args.claude_bin, model=args.llm_model, tools="", system_prompt=TAG_SYSTEM,
-                          cache_dir=CACHE / "llm_tag")
-    search = (ClaudeSearch(binary=args.claude_bin, model=args.llm_model, cache_dir=CACHE / "llm_search")
-              if args.proposer == "search" else None)
-    tag = f"{args.strategy}+L-search-{args.llm_model}-web-nocommon" if search else args.strategy
+    claude = {"binary": args.claude_bin, "model": args.llm_model}
+    tagger = ClaudeSearch(**claude, tools="", system_prompt=TAG_SYSTEM, cache_dir=CACHE / "llm_tag")
+    use_search, use_materials = args.proposer in ("search", "both"), args.proposer in ("materials", "both")
+    search = ClaudeSearch(**claude, cache_dir=CACHE / "llm_search") if use_search else None
+    namer = ClaudeSearch(**claude, tools="", system_prompt=materials_fix.NAMES_SYSTEM,
+                         cache_dir=CACHE / "llm_materials") if use_materials else None
+    fixer = ClaudeSearch(**claude, tools="", system_prompt=materials_fix.FIX_SYSTEM,
+                         cache_dir=CACHE / "llm_materials") if use_materials else None
+    ptag = {"search": f"search-{args.llm_model}-web", "materials": f"materials-{args.llm_model}",
+            "both": f"materials+search-{args.llm_model}-web"}.get(args.proposer)
+    tag = f"{args.strategy}+L-{ptag}-nocommon" if ptag else args.strategy
     per_call = []
     for folder in calls():
         name = call_name(folder)
@@ -222,51 +246,76 @@ def score(args: argparse.Namespace) -> None:
         ref = kr_reference(paragraphs, entities)
         rec = {"file": name, "tag": tag, "entities": len(entities),
                "entity_types": _count(entities.values()), "before": scores(ref, words)}
-        if search:
-            company = COMPANY.get(folder.parent.name, folder.parent.name)
-            when = f"{folder.name} earnings conference call, spoken in Korean"
-            rounds = search_and_verify(search, words, company, when=when)
-            checked = [(n, p, why) for n, rd in enumerate(rounds, 1) for p, why in rd.checked]
-            ok = list(dict.fromkeys(p for _, p, why in checked if why == "ok"))
-            proposer = FixedEditsProposer(list(dict.fromkeys(Edit(p.old, p.new) for p in ok)))
-            after, rep = correct_entities(words, list(dict.fromkeys(p.new for p in ok)), proposer)
-            traces = [rd.trace for rd in rounds]
+        if ptag:
+            edits: list[Proposal] = []  # 확정한 바꿈. 같은 old 는 자료 쪽이 먼저(회사 표기 우선)
+            if use_materials:
+                materials = materials_text(folder)
+                names = materials_fix.names_from_materials(materials, namer)
+                checked_m, trace_m = materials_fix.propose(words, names, materials,
+                                                           COMPANY_KO.get(folder.parent.name, ""), fixer)
+                edits += [p for p, why in checked_m if why == "ok"]
+                rec["materials"] = {"names": len(names), "confirmed": len(edits),
+                                    "proposals": [{"old": p.old, "new": p.new, "check": why} for p, why in checked_m],
+                                    "checks": _count(why for _, why in checked_m),
+                                    "cost_usd": (trace_m.cost_usd or 0) if trace_m else 0}
+            if use_search:
+                rec["search"], ok = _search(search, words, folder)
+                taken = {key(p.old) for p in edits}
+                edits += [p for p in ok if key(p.old) not in taken]
+            edits = list(dict.fromkeys(edits))
+            proposer = FixedEditsProposer(list(dict.fromkeys(Edit(p.old, p.new) for p in edits)))
+            after, rep = correct_entities(words, list(dict.fromkeys(p.new for p in edits)), proposer)
             rec |= {"after": scores(ref, after),
                     "outcome": edit_outcomes(ref, words, after, rep["mapping"], ko_norm),
                     "edits_in_script": edits_in_script(rep["edits"], raw_script),
-                    "correction": {k: v for k, v in rep.items() if k != "mapping"},
-                    "search": {"proposals": [{"round": n, "old": p.old, "new": p.new, "url": p.url,
-                                              "evidence": p.evidence, "check": why} for n, p, why in checked],
-                               "checks": _count(why for n, _, why in checked if n == 1),
-                               "retry_checks": _count(why for n, _, why in checked if n == 2),
-                               "confirmed": len(ok),
-                               "tool_calls": _count(c["name"] for t in traces for c in t.calls),
-                               "transcript_urls": list(dict.fromkeys(u for t in traces for u in transcript_urls(t))),
-                               "cost_usd": sum(t.cost_usd or 0 for t in traces)}}
+                    "correction": {k: v for k, v in rep.items() if k != "mapping"}}
             (runs / name / f"{tag}.words.json").write_text(
                 json.dumps([w.to_dict() for w in after], ensure_ascii=False), encoding="utf-8")
         # 교정 없는 채점은 O1.score.json — O1.json 은 받아쓰기 기록(창 · 이음매)이라 덮지 않는다
-        out = runs / name / (f"{tag}.json" if search else f"{tag}.score.json")
+        out = runs / name / (f"{tag}.json" if ptag else f"{tag}.score.json")
         out.write_text(json.dumps(rec, ensure_ascii=False, indent=1), encoding="utf-8")
         per_call.append(rec)
-        b = rec["before"]
-        talk = b["sections"]["talk"]
-        line = (f"{name}: 발표 부분 CER {talk['cer']['rate']} · 고유명사 {talk['entity']['rate']} · 숫자 "
-                f"{talk['number']['rate']} (전체 고유명사 {b['tagged']['entity']['rate']} · 숫자 "
-                f"{b['tagged']['number']['rate']})")
-        if search:
-            a, o = rec["after"], rec["outcome"]
-            line += (f" → 교정 뒤 발표 CER {a['sections']['talk']['cer']['rate']} · 고유명사 "
-                     f"{a['sections']['talk']['entity']['rate']} (전체 {a['tagged']['entity']['rate']}) · "
-                     f"바꿈 {o['applied']} (고침 {o['fixed']} · 망침 {o['broke']})"
-                     f" · 검색 제안 {sum(rec['search']['checks'].values())} → 확정 {rec['search']['confirmed']}")
-        print(line, flush=True)
+        print(_line(name, rec), flush=True)
     if not per_call:
         sys.exit("평가한 통화가 없다")
-    _report(args, tag, per_call, search)
+    _report(args, tag, per_call, search, use_materials)
 
 
-def _report(args: argparse.Namespace, tag: str, per_call: list[dict], search: ClaudeSearch | None) -> None:
+def _search(search: ClaudeSearch, words: list[Word], folder: Path) -> tuple[dict, list[Proposal]]:
+    company = COMPANY.get(folder.parent.name, folder.parent.name)
+    rounds = search_and_verify(search, words, company, when=f"{folder.name} earnings conference call, spoken in Korean")
+    checked = [(n, p, why) for n, rd in enumerate(rounds, 1) for p, why in rd.checked]
+    ok = list(dict.fromkeys(p for _, p, why in checked if why == "ok"))
+    traces = [rd.trace for rd in rounds]
+    return {"proposals": [{"round": n, "old": p.old, "new": p.new, "url": p.url, "evidence": p.evidence,
+                           "check": why} for n, p, why in checked],
+            "checks": _count(why for n, _, why in checked if n == 1),
+            "retry_checks": _count(why for n, _, why in checked if n == 2),
+            "confirmed": len(ok),
+            "tool_calls": _count(c["name"] for t in traces for c in t.calls),
+            "transcript_urls": list(dict.fromkeys(u for t in traces for u in transcript_urls(t))),
+            "cost_usd": sum(t.cost_usd or 0 for t in traces)}, ok
+
+
+def _line(name: str, rec: dict) -> str:
+    b = rec["before"]
+    talk = b["sections"]["talk"]
+    line = (f"{name}: 발표 부분 CER {talk['cer']['rate']} · 고유명사 {talk['entity']['rate']} · 숫자 "
+            f"{talk['number']['rate']} (전체 고유명사 {b['tagged']['entity']['rate']} · 숫자 "
+            f"{b['tagged']['number']['rate']})")
+    if "after" in rec:
+        a, o = rec["after"], rec["outcome"]
+        line += (f" → 교정 뒤 발표 CER {a['sections']['talk']['cer']['rate']} · 고유명사 "
+                 f"{a['sections']['talk']['entity']['rate']} (전체 {a['tagged']['entity']['rate']}) · "
+                 f"바꿈 {o['applied']} (고침 {o['fixed']} · 망침 {o['broke']})")
+        for src, label in (("materials", "자료"), ("search", "검색")):
+            if src in rec:
+                line += f" · {label} 제안 {len(rec[src]['proposals'])} → 확정 {rec[src]['confirmed']}"
+    return line
+
+
+def _report(args: argparse.Namespace, tag: str, per_call: list[dict], search: ClaudeSearch | None,
+            use_materials: bool) -> None:
     """묶음 숫자(이름 · 주소 · 글은 빼고 — 통화별 기록에만 남긴다)."""
     def pooled(side: str, get) -> float | None:
         recs = [get(r[side]) for r in per_call if side in r]
@@ -274,7 +323,8 @@ def _report(args: argparse.Namespace, tag: str, per_call: list[dict], search: Cl
         return round(sum(x.get("errors", x.get("S", 0) + x.get("D", 0) + x.get("I", 0)) for x in recs) / n, 5) \
             if n else None
 
-    sides = ("before", "after") if search else ("before",)
+    corrected = all("after" in r for r in per_call)
+    sides = ("before", "after") if corrected else ("before",)
     summary = {
         "tag": tag, "model": args.model, "calls": [r["file"] for r in per_call],
         "cer": [pooled(s, lambda x: x["overall"]) for s in sides],
@@ -286,18 +336,24 @@ def _report(args: argparse.Namespace, tag: str, per_call: list[dict], search: Cl
         "number_error": [pooled(s, lambda x: x["tagged"]["number"]) for s in sides],
         "reference_entities": sum(r["entities"] for r in per_call),
     }
-    if search:
+    if corrected:
         outs = [r["outcome"] for r in per_call]
-        applied = sum(o["applied"] for o in outs)
         summary["outcome"] = {k: sum(o[k] for o in outs) for k in ("fixed", "broke", "still_wrong", "neutral")}
-        summary["outcome"]["applied"] = applied
+        summary["outcome"]["applied"] = sum(o["applied"] for o in outs)
         summary["edits_in_script"] = _sum_dicts(r["edits_in_script"] for r in per_call)
+        summary["decisions"] = _sum_dicts(r["correction"]["decisions"] for r in per_call)
+    if use_materials:
+        summary["materials"] = {"names": sum(r["materials"]["names"] for r in per_call),
+                                "proposals": sum(len(r["materials"]["proposals"]) for r in per_call),
+                                "confirmed": sum(r["materials"]["confirmed"] for r in per_call),
+                                "checks": _sum_dicts(r["materials"]["checks"] for r in per_call),
+                                "cost_usd": round(sum(r["materials"]["cost_usd"] for r in per_call), 2)}
+    if search:
         summary["search"] = {"model": search.name, "sessions": search.calls, "cache_hits": search.hits,
                              "proposals": sum(sum(r["search"]["checks"].values()) for r in per_call),
                              "confirmed": sum(r["search"]["confirmed"] for r in per_call),
                              "checks": _sum_dicts(r["search"]["checks"] for r in per_call),
                              "retry_checks": _sum_dicts(r["search"]["retry_checks"] for r in per_call),
-                             "decisions": _sum_dicts(r["correction"]["decisions"] for r in per_call),
                              "calls_that_saw_scripts": sum(bool(r["search"]["transcript_urls"]) for r in per_call),
                              "cost_usd": round(sum(r["search"]["cost_usd"] for r in per_call), 2)}
     (ROOT / "reports").mkdir(exist_ok=True)
@@ -326,7 +382,7 @@ def main() -> None:
     ap.add_argument("step", choices=("transcribe", "score"))
     ap.add_argument("--model", default="large-v3-turbo")
     ap.add_argument("--strategy", default="O1")
-    ap.add_argument("--proposer", choices=("none", "search"), default="none")
+    ap.add_argument("--proposer", choices=("none", "search", "materials", "both"), default="none")
     ap.add_argument("--llm-model", default="claude-sonnet-5-5")
     ap.add_argument("--claude-bin", default=os.environ.get("CLAUDE_BIN", "claude"))
     args = ap.parse_args()
