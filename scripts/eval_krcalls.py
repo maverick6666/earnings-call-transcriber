@@ -49,6 +49,13 @@ RUNS = ROOT / "runs" / "krcalls"
 CACHE = ROOT / "cache"
 MODELS = ROOT / "models"
 COMPANY = {"samsungsds": "Samsung SDS (삼성SDS)"}
+COMPANY_KO = {"samsungsds": "삼성SDS"}
+
+
+def call_hint(folder: Path) -> str:
+    """O1R 이 뭉개진 창에 마지막으로 주는 통화 설명. 회사 이름과 분기만(스크립트 내용은 쓰지 않는다)."""
+    q = folder.name  # 2025Q3
+    return f"{COMPANY_KO.get(folder.parent.name, folder.parent.name)} {q[:4]}년 {q[-1]}분기 실적발표 컨퍼런스콜입니다."
 
 TAG_SYSTEM = "You extract named entities from Korean business text. Follow the user message. Do not use tools."
 TAG_PROMPT = """아래는 한국 회사의 실적발표 컨퍼런스콜 스크립트다. 이 글에 나오는 고유명사를 빠짐없이, 글에 적힌 철자 \
@@ -95,7 +102,7 @@ def transcribe(args: argparse.Namespace) -> None:
         asr.audio = audio
         t0 = time.time()
         res = runner.run(runner.RunConfig(args.strategy), asr, duration, f"krcalls-{name}", cache_dir=CACHE,
-                         energy=speech_energy(audio))
+                         energy=speech_energy(audio), hint=call_hint(folder))
         out.mkdir(parents=True, exist_ok=True)
         (out / f"{args.strategy}.words.json").write_text(
             json.dumps([w.to_dict() for w in res.words], ensure_ascii=False), encoding="utf-8")
