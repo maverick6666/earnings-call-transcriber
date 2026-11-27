@@ -4,6 +4,7 @@
     .venv/Scripts/python scripts/eval_krcalls.py score --model large-v3-turbo
     .venv/Scripts/python scripts/eval_krcalls.py score --model large-v3-turbo --proposer search --claude-bin <claude>
     .venv/Scripts/python scripts/eval_krcalls.py score --strategy O1R --proposer both --claude-bin <claude>
+    ... --quarters test --set test8   # 방법을 만들며 보지 않은 분기만(DEV_QUARTERS 를 뺀 것)
 
 - 정답은 회사가 낸 스크립트다. 발표 부분은 거의 말한 그대로지만 질의응답은 다듬어 줄인 글이고, 사회자 안내 ·
   화자 꼬리표는 없다(datasets.read_kr_script). 그래서 글자 오류율(CER)은 발표 부분과 질의응답을 나눠 싣는다.
@@ -77,9 +78,15 @@ JSON 만 답한다: {"entities": [{"text": "...", "type": "PERSON|ORG|PRODUCT|GP
 """
 
 
+# 방법을 만들며 본 통화(개발용). 시험 분기는 이 둘을 빼고, 방법 코드를 고정한 커밋으로 한 번만 돌린다.
+DEV_QUARTERS = ("2025Q3", "2025Q4")
+_QUARTERS: tuple[str, ...] = ()  # --quarters 로 고른 분기(비면 받아 둔 것 전부)
+
+
 def calls() -> list[Path]:
-    """받아 둔 통화 폴더(회사/분기). 녹음 · 스크립트가 다 있는 것만."""
-    return sorted(p for p in DATA.glob("*/*") if (p / "audio.flac").exists() and (p / "script.pdf").exists())
+    """받아 둔 통화 폴더(회사/분기). 녹음 · 스크립트가 다 있는 것만, --quarters 로 고른 분기만."""
+    return sorted(p for p in DATA.glob("*/*") if (p / "audio.flac").exists() and (p / "script.pdf").exists()
+                  and (not _QUARTERS or p.name in _QUARTERS))
 
 
 def call_name(folder: Path) -> str:
@@ -357,7 +364,9 @@ def _report(args: argparse.Namespace, tag: str, per_call: list[dict], search: Cl
                              "calls_that_saw_scripts": sum(bool(r["search"]["transcript_urls"]) for r in per_call),
                              "cost_usd": round(sum(r["search"]["cost_usd"] for r in per_call), 2)}
     (ROOT / "reports").mkdir(exist_ok=True)
-    path = ROOT / "reports" / f"krcalls_{args.model}_{len(per_call)}calls_{tag}.json"
+    group = args.set or f"{len(per_call)}calls"
+    summary["set"] = group
+    path = ROOT / "reports" / f"krcalls_{args.model}_{group}_{tag}.json"
     path.write_text(json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps(summary, ensure_ascii=False, indent=1))
 
@@ -385,7 +394,13 @@ def main() -> None:
     ap.add_argument("--proposer", choices=("none", "search", "materials", "both"), default="none")
     ap.add_argument("--llm-model", default="claude-sonnet-5-5")
     ap.add_argument("--claude-bin", default=os.environ.get("CLAUDE_BIN", "claude"))
+    ap.add_argument("--quarters", default="", help="쉼표로 이은 분기 · 'dev'(방법을 만들며 본 2통화) · 'test'(나머지)")
+    ap.add_argument("--set", default="", help="결과 파일 이름에 넣을 묶음 이름(기본: 'N calls')")
     args = ap.parse_args()
+    global _QUARTERS
+    every = sorted(p.name for p in DATA.glob("*/*") if (p / "audio.flac").exists())
+    _QUARTERS = {"dev": DEV_QUARTERS, "test": tuple(q for q in every if q not in DEV_QUARTERS)}.get(
+        args.quarters, tuple(q for q in args.quarters.split(",") if q))
     (transcribe if args.step == "transcribe" else score)(args)
 
 
