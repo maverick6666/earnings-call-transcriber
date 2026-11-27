@@ -1,0 +1,62 @@
+{
+ "tag": "O1+L-search-claude-sonnet-5-5-web-common3",
+ "subset": "eval10-first2",
+ "hyp": "asr",
+ "model": "large-v3-turbo",
+ "calls": [
+  "4320211",
+  "4341191"
+ ],
+ "wer": [
+  0.09995,
+  0.09859
+ ],
+ "entity_error": [
+  0.15598,
+  0.12245
+ ],
+ "number_error": [
+  0.12558,
+  0.12558
+ ],
+ "outcome": {
+  "fixed": 30,
+  "broke": 1,
+  "still_wrong": 4,
+  "neutral": 0,
+  "applied": 35,
+  "over_correction_rate": 0.0286
+ },
+ "asked_segments": 32,
+ "segments": 367,
+ "decisions": {
+  "ok": 33,
+  "touches_number": 1
+ },
+ "llm": null,
+ "search": {
+  "model": "claude-p:claude-sonnet-5-5",
+  "sessions": 0,
+  "cache_hits": 3,
+  "proposals": 14,
+  "checks": {
+   "ok": 9,
+   "evidence_mixed_with_transcript": 5
+  },
+  "retry_checks": {
+   "ok": 3,
+   "not_in_search_results": 2
+  },
+  "confirmed": 12,
+  "rules": {
+   "ok": 11,
+   "touches_number": 1
+  },
+  "tool_calls": {
+   "WebSearch": 14,
+   "WebFetch": 10
+  },
+  "calls_that_saw_transcripts": 1,
+  "cost_usd": 0.56
+ }
+}

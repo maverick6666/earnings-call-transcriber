@@ -49,6 +49,27 @@ turbo O1 실제 받아쓰기 11통화로 쟀다. [**검수 층 보고서**](repo
   18.7% → 16.3%(92곳을 바꿔 78곳 고침 · 8곳 망침). 같은 용어집을 받아쓸 때 넣으면(hotwords) 18.1% 로 효과가 없었다.
   정확한 용어집이면 둘을 함께 써서 14.7%.
 - **흔한 낱말은 고치지 않는다.** 위험 표시를 근거로 흔한 낱말 바꿈을 허용하면 망침이 8곳 → 85~123곳으로 늘었다.
+- **용어집 없이 검색으로 확인해 고칠 수 있다(2통화 시범).** claude -p 가 통화 전체에서 잘못 들은 듯한 이름을 골라 검색하고,
+  검색 결과에 그 철자가 실제로 있는 것만 받아들인다(전사문 · 회사 스크립트는 근거에서 막음). 고유명사 오류 15.6% → 12.2%
+  (35곳 바꿔 망침 1곳). 이 두 통화로 확인 규칙을 다듬었으므로 개발용 숫자다.
+
+## 한국어 실제 실적 콜
+
+삼성SDS 가 IR 페이지에 올린 한국어 실적 콜 2개(녹음 + 회사 스크립트, 1.9시간)로 쟀다. [**한국 콜 보고서**](reports/korean_calls.md)
+
+| 발표 부분 · 2통화 | 글자 오류 | 고유명사 오류 | 숫자 오류 |
+|---|---:|---:|---:|
+| O1 겹쳐 자르기 | 20.7% | 62.5% | 16.4% |
+| **O1R** 뭉개진 창 다시 받아쓰기 | 11.0% | 54.4% | 1.7% |
+| O1R + 회사 자료 · 검색 교정 | **9.6%** | **25.7%** | 1.7% |
+
+- **영어에서 가장 좋던 O1 이 한국어에서는 말을 통째로 빠뜨렸다.** 일부 창이 30초 내용 대신 '기상캐스터 배혜지' 같은
+  방송 자막 헛소리만 내서, 한 통화는 발표 글자의 17%가 사라졌다. 말소리는 있는데 글자가 거의 없는 창을 찾아 창을 옮기거나
+  앞 창 글을 힌트로 주어 다시 받아 적으면(O1R) 29개 창이 모두 살아났다. 영어 11통화에서는 창 1개만 건드렸다.
+- **남은 고유명사 오류는 대부분 표기 문제였다.** 회사가 'Brity Copilot' 으로 적는 이름을 '브리티 코파일럿' 으로 받아 적는다.
+  통화 전에 공개된 자료(발표자료 · 참석자 명단 · 지난 분기 스크립트)로 회사 표기 목록을 만들고 그 표기로만 고치게 했다.
+  한글 · 영문 표기는 소리 열쇠로 견주고, 이름 뒤에 붙은 조사는 떼어 찾은 뒤 다시 붙인다.
+- 두 통화는 이 방법들을 만들며 본 개발용 자료다. 남은 분기로 같은 설정 그대로 다시 재야 한다.
 
 ## 무엇을 재는가
 
@@ -126,14 +147,23 @@ python scripts/eval_detector.py --model large-v3-turbo --alt small
 python scripts/eval_correction.py --model large-v3-turbo --proposer fuzzy --glossary noisy
 ANTHROPIC_API_KEY=... python scripts/eval_correction.py --model large-v3-turbo --proposer llm --glossary noisy
 python scripts/eval_correction.py --hyp reference --proposer fuzzy --glossary noisy   # 정답 글에 걸어 과교정만
+python scripts/eval_correction.py --model large-v3-turbo --proposer search --claude-bin <claude 실행 파일>  # 구독 로그인
 python scripts/review_tables.py
+
+# 한국어 실제 실적 콜(삼성SDS IR 페이지, pip install -e ".[kr]")
+python scripts/download_data.py krcalls 2025Q3 2025Q4
+python scripts/eval_krcalls.py transcribe --strategy O1R
+python scripts/eval_krcalls.py score --strategy O1R --proposer both --claude-bin <claude 실행 파일>
 ```
 
 평가는 faster-whisper 1.2.1 · RTX 5070 으로 했다. 평가 자료 · 녹음 · 받아쓰기 결과 · 모델은 저장소에 넣지 않는다
-(Earnings-21 은 CC BY-SA 4.0, Zeroth-Korean 은 CC BY 4.0 — 숫자 결과만 싣는다).
+(Earnings-21 은 CC BY-SA 4.0, Zeroth-Korean 은 CC BY 4.0, 삼성SDS 녹음 · 스크립트는 회사 IR 페이지 공개 자료 — 숫자 결과만 싣는다).
 
 ## 한계
 
-- 한국어는 낭독 문장을 이어 붙인 자료다. 공개된 한국어 어닝콜 정답 자료가 없다.
-- 검수 층은 영어 Earnings-21 받아쓰기(turbo · Qwen3-ASR O1)로만 쟀고, LLM 제안자는 API 키가 필요해 돌리지 않았다(유사도 제안자만).
+- 위 표의 한국어는 낭독 문장을 이어 붙인 자료다. 실제 한국어 실적 콜은 삼성SDS 2통화뿐이고 정답이 회사 스크립트(질의응답은
+  줄인 글)라 발표 부분만 본문 숫자로 쓴다.
+- API 키로 부르는 LLM 제안자는 돌리지 않았다. 검색 · 회사 자료 제안자는 claude -p(구독 로그인)로 영어 2통화 · 한국어
+  2통화에서만 쟀고, 그 통화들을 보며 확인 규칙을 다듬었다(개발용 숫자).
 - 창 길이 · 겹침은 고르지 않고 처음 정한 값(30초 · 15초)을 썼다. 시험 자료를 보고 고친 것은 투표(O2) 하나이고 보고서에 적었다.
+  O1R 의 판정 기준(글자율 0.3 · 0.6배)과 시도 순서는 한국어 2통화를 보고 정했다.

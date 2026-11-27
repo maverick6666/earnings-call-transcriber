@@ -16,6 +16,8 @@ cuda = ["nvidia-cublas-cu12", "nvidia-cudnn-cu12"]
 # Qwen3-ASR(맥락을 넣는 음성 LLM). torch · transformers 가 무거워 별도 환경 권장(평가는 Python 3.12 · qwen-asr 0.0.6 ·
 # torch 2.11 cu128 · transformers 4.57). CUDA 판 torch 는 먼저 PyTorch 안내대로 깐다. 모델은 처음 실행 때 Hugging Face 에서 받음.
 qwen = ["qwen-asr==0.0.6", "librosa>=0.10"]
+# 한국어 실적 콜 평가(회사 스크립트 · 발표자료 PDF 읽기)
+kr = ["pypdf>=5"]
 dev = ["pytest>=8.0", "ruff>=0.6"]
 
 [build-system]
