@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 import time
 from dataclasses import asdict, dataclass, field
@@ -18,10 +19,10 @@ from typing import Protocol
 
 import numpy as np
 
-from . import chunking, merge
+from . import chunking, merge, repair
 from .words import Word
 
-STRATEGIES = ("B0", "B1", "O1", "O2", "V1", "V2")
+STRATEGIES = ("B0", "B1", "O1", "O2", "V1", "V2", "O1R")  # O1R = O1 + 뭉개진 창 고치기(repair)
 
 
 class Transcriber(Protocol):
@@ -83,7 +84,7 @@ def plan(cfg: RunConfig, duration: float, energy: tuple[np.ndarray, np.ndarray] 
         return chunking.fixed(duration, cfg.fixed_size)
     if s == "B1":
         return chunking.single(duration)
-    if s in ("O1", "O2"):
+    if s in ("O1", "O2", "O1R"):
         return chunking.overlapped(duration, cfg.window, cfg.hop)
     if energy is None:
         raise ValueError("V1 · V2 는 소리 크기(energy)가 필요하다")
@@ -93,7 +94,10 @@ def plan(cfg: RunConfig, duration: float, energy: tuple[np.ndarray, np.ndarray] 
 
 
 def run(cfg: RunConfig, asr: Transcriber, duration: float, audio_id: str, *, cache_dir: Path | None = None,
-        energy: tuple[np.ndarray, np.ndarray] | None = None) -> RunResult:
+        energy: tuple[np.ndarray, np.ndarray] | None = None, hint: str = "") -> RunResult:
+    """hint: O1R 이 뭉개진 창을 다시 받아 적을 때 마지막으로 쓰는 통화 설명(예: '삼성SDS 2025년 3분기 실적발표')."""
+    if cfg.strategy == "O1R" and energy is None:
+        raise ValueError("O1R 은 말소리 구간(energy)이 필요하다")
     chunks = plan(cfg, duration, energy)
     problems = chunking.check_partition(chunks, duration)
     if problems:
@@ -108,18 +112,15 @@ def run(cfg: RunConfig, asr: Transcriber, duration: float, audio_id: str, *, cac
         if c.skip:
             results.append((c, []))
             continue
-        path = store / f"{c.start:.3f}-{c.end:.3f}.json" if store else None
-        if path and path.exists():
-            words = [Word(**w) for w in json.loads(path.read_text(encoding="utf-8"))]
-            cached += 1
-        else:
-            words = asr.transcribe(c.start, c.end)
-            done += 1
-            if path:
-                tmp = path.with_suffix(".tmp")
-                tmp.write_text(json.dumps([w.to_dict() for w in words], ensure_ascii=False), encoding="utf-8")
-                _replace(tmp, path)  # 다 쓴 뒤에만 이름을 바꿔, 중간에 멈춰도 반쯤 쓴 저장본이 남지 않게
+        words, hit = _transcribe_cached(asr, store, c.start, c.end)
+        cached += hit
+        done += not hit
         results.append((c, words))
+    repairs = None
+    if cfg.strategy == "O1R":
+        can_prompt = "prompt" in inspect.signature(asr.transcribe).parameters
+        results, repairs = repair.repair(results, lambda a, b, p: _transcribe_cached(asr, store, a, b, p)[0],
+                                         energy, duration, hint=hint, can_prompt=can_prompt)
     words = merge.merge_vote(results) if cfg.strategy == "O2" else merge.merge_own(results)
     check_output(words, chunks)
     manifest = {
@@ -128,7 +129,25 @@ def run(cfg: RunConfig, asr: Transcriber, duration: float, audio_id: str, *, cac
         "skipped_chunks": sum(c.skip for c in chunks),
         "output_hash": hashlib.sha256(json.dumps([w.to_dict() for w in words]).encode()).hexdigest()[:16],
     }
+    if repairs is not None:
+        manifest["repairs"] = repairs
+        manifest["hint"] = hint
     return RunResult(words, chunks, manifest, done, cached)
+
+
+def _transcribe_cached(asr: Transcriber, store: Path | None, start: float, end: float, prompt: str | None = None
+                       ) -> tuple[list[Word], bool]:
+    """(낱말, 저장본에서 읽었나). 저장본 이름은 구간 — 힌트를 줬으면 힌트 해시를 붙인다."""
+    name = f"{start:.3f}-{end:.3f}" + (f".p{hashlib.sha256(prompt.encode()).hexdigest()[:12]}" if prompt else "")
+    path = store / f"{name}.json" if store else None
+    if path and path.exists():
+        return [Word(**w) for w in json.loads(path.read_text(encoding="utf-8"))], True
+    words = asr.transcribe(start, end, prompt=prompt) if prompt else asr.transcribe(start, end)
+    if path:
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps([w.to_dict() for w in words], ensure_ascii=False), encoding="utf-8")
+        _replace(tmp, path)  # 다 쓴 뒤에만 이름을 바꿔, 중간에 멈춰도 반쯤 쓴 저장본이 남지 않게
+    return words, False
 
 
 def _replace(tmp: Path, path: Path, tries: int = 10, wait: float = 0.5) -> None:

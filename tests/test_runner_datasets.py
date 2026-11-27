@@ -115,7 +115,7 @@ def test_transcribe_retries_with_trailing_silence_when_alignment_crashes():
     asr.padded_retries = []
     lengths = []
 
-    def fake_words(clip, start):
+    def fake_words(clip, start, prompt=None):
         lengths.append(len(clip))
         if len(lengths) == 1:
             raise IndexError("boolean index did not match")
