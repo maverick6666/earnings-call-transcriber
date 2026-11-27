@@ -144,7 +144,8 @@ def krcalls(*quarters: str) -> None:
     materials/ — 통화 전에 공개된 자료(발표자료와 같은 날 · 다시 듣기 페이지의 참석자 명단 · 지난 분기 스크립트).
     교정기는 materials/ 와 deck.pdf 만 본다. script.pdf 는 채점에만 쓴다."""
     links = sds_links()
-    for q in quarters or sorted(links):
+    scripted = sorted(q for q, v in links.items() if set(v) == {"deck", "script"})  # 분기를 안 주면 이것 전부
+    for q in quarters or scripted:
         if q not in links or set(links[q]) != {"deck", "script"}:
             raise SystemExit(f"{q}: IR 페이지에 녹음 · 발표자료 · 스크립트가 다 있지 않다 ({sorted(links.get(q, {}))})")
         out = DATA / "krcalls" / "samsungsds" / q

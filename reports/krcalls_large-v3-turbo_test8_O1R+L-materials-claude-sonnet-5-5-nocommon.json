@@ -1,0 +1,77 @@
+{
+ "tag": "O1R+L-materials-claude-sonnet-5-5-nocommon",
+ "model": "large-v3-turbo",
+ "calls": [
+  "samsungsds-2024Q2",
+  "samsungsds-2024Q3",
+  "samsungsds-2024Q4",
+  "samsungsds-2025Q1",
+  "samsungsds-2025Q2",
+  "samsungsds-2026Q1",
+  "samsungsds-2026Q2",
+  "samsungsds-2026Q3"
+ ],
+ "cer": [
+  0.50513,
+  0.4933
+ ],
+ "cer_talk": [
+  0.27498,
+  0.25815
+ ],
+ "cer_qa": [
+  0.92023,
+  0.91743
+ ],
+ "miss_talk": [
+  0.1055,
+  0.09059
+ ],
+ "entity_error_talk": [
+  0.48441,
+  0.25842
+ ],
+ "number_error_talk": [
+  0.03279,
+  0.03279
+ ],
+ "entity_error": [
+  0.53112,
+  0.29606
+ ],
+ "number_error": [
+  0.0586,
+  0.0586
+ ],
+ "reference_entities": 470,
+ "outcome": {
+  "fixed": 155,
+  "broke": 7,
+  "still_wrong": 138,
+  "neutral": 0,
+  "applied": 300
+ },
+ "edits_in_script": {
+  "applied_pairs": 136,
+  "new_in_script": 125,
+  "old_in_script": 6
+ },
+ "decisions": {
+  "ok": 249,
+  "not_similar": 15,
+  "old_not_found": 14,
+  "touches_number": 7,
+  "case_or_spacing_only": 40
+ },
+ "materials": {
+  "names": 498,
+  "proposals": 171,
+  "confirmed": 168,
+  "checks": {
+   "ok": 168,
+   "old_not_in_transcript": 3
+  },
+  "cost_usd": 0.75
+ },
+ "set": "test8"
+}

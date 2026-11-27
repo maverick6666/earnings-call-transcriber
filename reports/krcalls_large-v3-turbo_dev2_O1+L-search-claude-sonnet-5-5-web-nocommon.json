@@ -17,6 +17,10 @@
   0.81015,
   0.80853
  ],
+ "miss_talk": [
+  0.18169,
+  0.18008
+ ],
  "entity_error_talk": [
   0.62454,
   0.59727
@@ -52,8 +56,8 @@
  },
  "search": {
   "model": "claude-p:claude-sonnet-5-5",
-  "sessions": 1,
-  "cache_hits": 2,
+  "sessions": 0,
+  "cache_hits": 3,
   "proposals": 52,
   "confirmed": 44,
   "checks": {
@@ -67,5 +71,6 @@
   },
   "calls_that_saw_scripts": 2,
   "cost_usd": 1.49
- }
+ },
+ "set": "dev2"
 }

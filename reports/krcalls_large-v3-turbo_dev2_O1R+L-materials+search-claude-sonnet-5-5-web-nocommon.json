@@ -17,6 +17,10 @@
   0.82813,
   0.82299
  ],
+ "miss_talk": [
+  0.0758,
+  0.06172
+ ],
  "entity_error_talk": [
   0.54399,
   0.25651
@@ -78,5 +82,6 @@
   },
   "calls_that_saw_scripts": 2,
   "cost_usd": 1.47
- }
+ },
+ "set": "dev2"
 }
