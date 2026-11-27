@@ -115,7 +115,7 @@ def test_transcribe_retries_with_trailing_silence_when_alignment_crashes():
     asr.padded_retries = []
     lengths = []
 
-    def fake_words(clip, start):
+    def fake_words(clip, start, prompt=None):
         lengths.append(len(clip))
         if len(lengths) == 1:
             raise IndexError("boolean index did not match")
@@ -145,3 +145,24 @@ def test_cache_write_retries_when_windows_holds_the_file():
     assert ok.calls == 3
     with pytest.raises(PermissionError):
         runner._replace(Flaky(fails=9), None, tries=3, wait=0)
+
+
+def test_qwen_alignment_keeps_original_text_and_times():
+    """시각 맞추기 도구가 '4.2%' 를 '42' 로 다듬어도 낱말 글은 원문, 시각만 옮겨 붙인다."""
+    from callscribe.qwen import words_from_alignment
+
+    items = [("Revenue", 0.0, 0.4), ("grew", 0.5, 0.7), ("42", 0.8, 1.3), ("in", 1.4, 1.5), ("Q3", 1.6, 1.9)]
+    out = words_from_alignment("Revenue grew 4.2% — in Q3.", items, offset=10.0, clip_end=2.0)
+    assert [w.text for w in out] == ["Revenue", "grew", "4.2%", "—", "in", "Q3."]
+    assert (out[2].start, out[2].end) == (10.8, 11.3)
+    assert out[3].start == out[3].end == 11.3  # 글자가 남지 않는 낱말은 앞 낱말 끝에
+    assert all(a.start <= b.start for a, b in zip(out, out[1:], strict=False))
+    assert words_from_alignment("", items) == []
+
+
+def test_qwen_alignment_maps_korean_subword_pieces_to_eojeol():
+    from callscribe.qwen import words_from_alignment
+
+    items = [("매출", 0.0, 0.3), ("이", 0.3, 0.4), ("늘었다", 0.5, 0.9)]
+    out = words_from_alignment("매출이 늘었다.", items)
+    assert [(w.text, w.start, w.end) for w in out] == [("매출이", 0.0, 0.4), ("늘었다.", 0.5, 0.9)]

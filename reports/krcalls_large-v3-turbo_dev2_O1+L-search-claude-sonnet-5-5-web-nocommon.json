@@ -1,0 +1,76 @@
+{
+ "tag": "O1+L-search-claude-sonnet-5-5-web-nocommon",
+ "model": "large-v3-turbo",
+ "calls": [
+  "samsungsds-2025Q3",
+  "samsungsds-2025Q4"
+ ],
+ "cer": [
+  0.45504,
+  0.45335
+ ],
+ "cer_talk": [
+  0.20741,
+  0.20568
+ ],
+ "cer_qa": [
+  0.81015,
+  0.80853
+ ],
+ "miss_talk": [
+  0.18169,
+  0.18008
+ ],
+ "entity_error_talk": [
+  0.62454,
+  0.59727
+ ],
+ "number_error_talk": [
+  0.16434,
+  0.16434
+ ],
+ "entity_error": [
+  0.62047,
+  0.59417
+ ],
+ "number_error": [
+  0.16387,
+  0.16387
+ ],
+ "reference_entities": 128,
+ "outcome": {
+  "fixed": 20,
+  "broke": 0,
+  "still_wrong": 36,
+  "neutral": 2,
+  "applied": 58
+ },
+ "edits_in_script": {
+  "applied_pairs": 38,
+  "new_in_script": 30,
+  "old_in_script": 1
+ },
+ "decisions": {
+  "ok": 51,
+  "not_similar": 6
+ },
+ "search": {
+  "model": "claude-p:claude-sonnet-5-5",
+  "sessions": 0,
+  "cache_hits": 3,
+  "proposals": 52,
+  "confirmed": 44,
+  "checks": {
+   "ok": 42,
+   "not_in_search_results": 9,
+   "echo_of_query": 1
+  },
+  "retry_checks": {
+   "not_in_search_results": 8,
+   "ok": 2
+  },
+  "calls_that_saw_scripts": 2,
+  "cost_usd": 1.49
+ },
+ "set": "dev2"
+}

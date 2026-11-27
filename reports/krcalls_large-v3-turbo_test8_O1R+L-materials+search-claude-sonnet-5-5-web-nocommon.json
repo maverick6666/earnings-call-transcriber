@@ -1,0 +1,98 @@
+{
+ "tag": "O1R+L-materials+search-claude-sonnet-5-5-web-nocommon",
+ "model": "large-v3-turbo",
+ "calls": [
+  "samsungsds-2024Q2",
+  "samsungsds-2024Q3",
+  "samsungsds-2024Q4",
+  "samsungsds-2025Q1",
+  "samsungsds-2025Q2",
+  "samsungsds-2026Q1",
+  "samsungsds-2026Q2",
+  "samsungsds-2026Q3"
+ ],
+ "cer": [
+  0.50513,
+  0.49301
+ ],
+ "cer_talk": [
+  0.27498,
+  0.25785
+ ],
+ "cer_qa": [
+  0.92023,
+  0.91714
+ ],
+ "miss_talk": [
+  0.1055,
+  0.09033
+ ],
+ "entity_error_talk": [
+  0.48441,
+  0.25436
+ ],
+ "number_error_talk": [
+  0.03279,
+  0.03279
+ ],
+ "entity_error": [
+  0.53112,
+  0.2917
+ ],
+ "number_error": [
+  0.0586,
+  0.0586
+ ],
+ "reference_entities": 470,
+ "outcome": {
+  "fixed": 166,
+  "broke": 7,
+  "still_wrong": 192,
+  "neutral": 1,
+  "applied": 366
+ },
+ "edits_in_script": {
+  "applied_pairs": 196,
+  "new_in_script": 159,
+  "old_in_script": 6
+ },
+ "decisions": {
+  "ok": 312,
+  "not_similar": 26,
+  "touches_number": 11,
+  "case_or_spacing_only": 42,
+  "old_not_found": 15
+ },
+ "materials": {
+  "names": 498,
+  "proposals": 171,
+  "confirmed": 168,
+  "checks": {
+   "ok": 168,
+   "old_not_in_transcript": 3
+  },
+  "cost_usd": 0.75
+ },
+ "search": {
+  "model": "claude-p:claude-sonnet-5-5",
+  "sessions": 0,
+  "cache_hits": 15,
+  "proposals": 192,
+  "confirmed": 170,
+  "checks": {
+   "ok": 151,
+   "old_not_in_transcript": 3,
+   "url_not_seen": 2,
+   "not_in_search_results": 24,
+   "evidence_mixed_with_transcript": 6,
+   "echo_of_query": 6
+  },
+  "retry_checks": {
+   "ok": 19,
+   "not_in_search_results": 16
+  },
+  "calls_that_saw_scripts": 7,
+  "cost_usd": 6.66
+ },
+ "set": "test8"
+}

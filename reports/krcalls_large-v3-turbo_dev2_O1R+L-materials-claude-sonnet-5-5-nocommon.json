@@ -1,0 +1,70 @@
+{
+ "tag": "O1R+L-materials-claude-sonnet-5-5-nocommon",
+ "model": "large-v3-turbo",
+ "calls": [
+  "samsungsds-2025Q3",
+  "samsungsds-2025Q4"
+ ],
+ "cer": [
+  0.40511,
+  0.39522
+ ],
+ "cer_talk": [
+  0.11012,
+  0.09699
+ ],
+ "cer_qa": [
+  0.82813,
+  0.82291
+ ],
+ "miss_talk": [
+  0.0758,
+  0.06249
+ ],
+ "entity_error_talk": [
+  0.54399,
+  0.26766
+ ],
+ "number_error_talk": [
+  0.01748,
+  0.01748
+ ],
+ "entity_error": [
+  0.55792,
+  0.31983
+ ],
+ "number_error": [
+  0.05147,
+  0.05147
+ ],
+ "reference_entities": 128,
+ "outcome": {
+  "fixed": 48,
+  "broke": 1,
+  "still_wrong": 25,
+  "neutral": 0,
+  "applied": 74
+ },
+ "edits_in_script": {
+  "applied_pairs": 44,
+  "new_in_script": 43,
+  "old_in_script": 3
+ },
+ "decisions": {
+  "case_or_spacing_only": 24,
+  "ok": 63,
+  "old_not_found": 8,
+  "not_similar": 5,
+  "adds_or_drops_part": 1
+ },
+ "materials": {
+  "names": 153,
+  "proposals": 55,
+  "confirmed": 55,
+  "checks": {
+   "ok": 55
+  },
+  "cost_usd": 0.25
+ },
+ "set": "dev2"
+}

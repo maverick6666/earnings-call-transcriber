@@ -1,0 +1,53 @@
+{
+ "tag": "O1+L-fuzzy0.8-noisy-nocommon",
+ "subset": "eval10",
+ "hyp": "reference",
+ "model": "large-v3-turbo",
+ "calls": [
+  "4320211",
+  "4341191",
+  "4346818",
+  "4359971",
+  "4365024",
+  "4366522",
+  "4366893",
+  "4367535",
+  "4383161",
+  "4384964",
+  "4387332"
+ ],
+ "wer": [
+  0.0,
+  0.00865
+ ],
+ "entity_error": [
+  0.0,
+  0.00998
+ ],
+ "number_error": [
+  0.0,
+  0.00901
+ ],
+ "outcome": {
+  "fixed": 0,
+  "broke": 620,
+  "still_wrong": 0,
+  "neutral": 0,
+  "applied": 620,
+  "over_correction_rate": 1.0
+ },
+ "asked_segments": 1212,
+ "segments": 1212,
+ "decisions": {
+  "adds_or_drops_words": 112,
+  "ok": 514,
+  "not_similar": 189,
+  "adds_or_drops_part": 88,
+  "inflection_only": 92,
+  "crosses_punctuation": 42,
+  "old_is_known_name": 17,
+  "touches_number": 10,
+  "old_not_found": 8
+ },
+ "llm": null
+}

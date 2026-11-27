@@ -1,0 +1,48 @@
+{
+ "tag": "O1+L-fuzzy0.8-oracle-noshape-nocommon",
+ "subset": "eval10",
+ "hyp": "reference",
+ "model": "large-v3-turbo",
+ "calls": [
+  "4320211",
+  "4341191",
+  "4346818",
+  "4359971",
+  "4365024",
+  "4366522",
+  "4366893",
+  "4367535",
+  "4383161",
+  "4384964",
+  "4387332"
+ ],
+ "wer": [
+  0.0,
+  0.00815
+ ],
+ "entity_error": [
+  0.0,
+  0.01248
+ ],
+ "number_error": [
+  0.0,
+  0.00376
+ ],
+ "outcome": {
+  "fixed": 0,
+  "broke": 703,
+  "still_wrong": 0,
+  "neutral": 2,
+  "applied": 705,
+  "over_correction_rate": 0.9972
+ },
+ "asked_segments": 1212,
+ "segments": 1212,
+ "decisions": {
+  "ok": 610,
+  "not_similar": 144,
+  "old_is_known_name": 15,
+  "old_not_found": 9
+ },
+ "llm": null
+}

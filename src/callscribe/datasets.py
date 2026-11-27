@@ -9,12 +9,17 @@ Earnings-21 (Rev, CC BY-SA 4.0) — 실제 어닝콜 44건 · 39시간.
 Zeroth-Korean (OpenSLR 40, CC BY 4.0) — 낭독 문장. 긴 오디오는 문장을 쉼과 함께 이어 붙여 만든다(build_long_audio):
     정답이 문장 단위 시각까지 정확히 있어 경계 효과를 잴 수 있다. 문장 안 글자 시각은 고르게 나눈 근사다.
     폴더 구조는 LibriSpeech 식(`*.trans.txt` 에 '문장번호 글') 으로 보고 읽는다 — 내려받은 뒤 다시 확인한다.
+
+한국 실적 콜(삼성SDS IR 페이지) — 녹음 + 회사가 낸 스크립트. 스크립트는 정답 전사문이 아니라 회사 글이다:
+    발표 부분은 거의 말한 그대로, 질의응답은 다듬어 줄인 글이고, 사회자 안내는 없다. 화자 꼬리표는 말한 것이 아니라 뺀다
+    (read_kr_script). 시각이 없어 점수 계산이 받아쓰기 시각으로 위치를 잡는다.
 """
 
 from __future__ import annotations
 
 import ast
 import json
+import re
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -27,8 +32,11 @@ NLP_HEADER = ["token", "speaker", "ts", "endTs", "punctuation", "case", "tags", 
 
 
 def _float(x: str) -> float | None:
-    x = x.strip()
-    return float(x) if x else None
+    """빈 칸 · 깨진 값('.' — Eval-10 밖 몇몇 파일에 있다)은 시각 없음으로 본다."""
+    try:
+        return float(x)
+    except ValueError:
+        return None
 
 
 def read_nlp(path: Path, wer_tags_path: Path | None = None) -> list[RefToken]:
@@ -97,3 +105,60 @@ def build_long_audio(utterances: list[tuple[str, np.ndarray, str]], sr: int, see
         parts.append(np.zeros(int(g * sr), dtype=np.float32))
         t += d + int(g * sr) / sr
     return np.concatenate(parts), ref, spans
+
+
+# 스크립트의 화자 꼬리표: 'Q. 증권사, 이름 위원' · 'A1. IR팀장, 이름 상무' · '[ 물류사업부 ]'
+# · 끝인사 앞 'IR팀장, 이름 상무'
+_KR_LABEL = re.compile(r"(?:Q|A\d*)\.\s.*|\[.*\]|[^,]{2,40},\s*[가-힣]{2,4}\s*"
+                       r"(?:상무|전무|부사장|사장|부회장|이사|위원|팀장|실장|센터장|본부장|연구원|애널리스트)")
+_KR_QA = re.compile(r"\[\s*Q\s*&\s*A.*\]")
+_KR_TITLE = re.compile(r".*컨퍼런스\s*콜")
+_KR_PAGE = re.compile(r"-\s*\d+\s*-|\d+\s*/\s*\d+")  # 본문에 섞인 쪽 번호('- 19 -' · '1/24')
+# 숫자 + 붙은 단위('3조' · '3,913억원' · '0.3%p' · '23,300여개사'). 뒤 조사('으로' 등)는 숫자 꼬리표에 넣지 않는다.
+KR_NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?(?:%p|%|여|조|억|만|천|백|원|개사|개|명|배|년|분기|월|일|위|건|곳|p)*")
+
+
+def read_kr_script(text: str) -> list[tuple[str, str]]:
+    """회사 스크립트 글 → [(부분, 문단)]. 부분은 'talk'(발표) · 'qa'(질의응답). 첫 줄 제목과 화자 꼬리표는 뺀다.
+    PDF 에서 뽑은 글은 줄이 문장 중간에서 끊겨 있어 빈 줄 · 꼬리표 사이를 한 문단으로 잇는다."""
+    out: list[tuple[str, str]] = []
+    section, buf = "talk", []
+    lines = [line.strip() for line in text.splitlines()]
+    title = next((k for k, line in enumerate(lines) if line and not _KR_PAGE.fullmatch(line)), len(lines))
+    if title < len(lines) and _KR_TITLE.fullmatch(lines[title]):
+        lines[title] = ""  # 제목 줄(쪽 번호가 앞에 올 수 있다)
+
+    def flush() -> None:
+        if buf:
+            out.append((section, " ".join(buf)))
+            buf.clear()
+
+    for line in lines:
+        if _KR_QA.fullmatch(line):
+            flush()
+            section = "qa"
+        elif _KR_PAGE.fullmatch(line):
+            continue  # 쪽 번호는 말한 것이 아니고 문장 중간에 끼므로 문단을 끊지 않는다
+        elif not line or _KR_LABEL.fullmatch(line):
+            flush()
+        else:
+            buf.append(line)
+    flush()
+    return out
+
+
+def kr_reference(paragraphs: Iterable[tuple[str, str]], entities: dict[str, str]) -> list[RefToken]:
+    """문단 → 정답 낱말. 고유명사(entities: 글 → 종류, 예 {'삼성SDS': 'ORG'})와 숫자(KR_NUMBER)는 떼어 꼬리표를 달고,
+    질의응답 부분 낱말에는 'QA' 꼬리표를 더한다. 고유명사는 긴 것부터 맞춘다('삼성SDS' 가 'SDS' 보다 먼저)."""
+    names = sorted((n for n in entities if n.strip()), key=len, reverse=True)
+    pattern = re.compile("|".join([*(re.escape(n) for n in names), KR_NUMBER.pattern]))
+    out: list[RefToken] = []
+    for section, text in paragraphs:
+        extra = ("QA",) if section == "qa" else ()
+        pos = 0
+        for m in pattern.finditer(text):
+            out.extend(RefToken(t, tags=extra) for t in text[pos:m.start()].split())
+            out.append(RefToken(m.group(), tags=(entities.get(m.group(), "CARDINAL"), *extra)))
+            pos = m.end()
+        out.extend(RefToken(t, tags=extra) for t in text[pos:].split())
+    return out

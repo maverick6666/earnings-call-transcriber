@@ -1,0 +1,76 @@
+{
+ "tag": "O1+L-fuzzy0.8-noisy-common3",
+ "subset": "heldout33",
+ "hyp": "reference",
+ "model": "large-v3-turbo",
+ "calls": [
+  "4330115",
+  "4344338",
+  "4344866",
+  "4346923",
+  "4359732",
+  "4360366",
+  "4360674",
+  "4360717",
+  "4361631",
+  "4363614",
+  "4364366",
+  "4365948",
+  "4366302",
+  "4366429",
+  "4367318",
+  "4368670",
+  "4374910",
+  "4375653",
+  "4382825",
+  "4384198",
+  "4384683",
+  "4384744",
+  "4385072",
+  "4385388",
+  "4385939",
+  "4386541",
+  "4387383",
+  "4387865",
+  "4389907",
+  "4392809",
+  "4394084",
+  "4397800",
+  "4397829"
+ ],
+ "wer": [
+  0.0,
+  0.00099
+ ],
+ "entity_error": [
+  0.0,
+  0.01312
+ ],
+ "number_error": [
+  0.0,
+  0.00117
+ ],
+ "outcome": {
+  "fixed": 0,
+  "broke": 186,
+  "still_wrong": 0,
+  "neutral": 0,
+  "applied": 186,
+  "over_correction_rate": 1.0
+ },
+ "asked_segments": 3348,
+ "segments": 3349,
+ "decisions": {
+  "common_words_without_risk": 1413,
+  "adds_or_drops_words": 258,
+  "adds_or_drops_part": 192,
+  "inflection_only": 304,
+  "ok": 163,
+  "not_similar": 644,
+  "old_is_known_name": 62,
+  "crosses_punctuation": 37,
+  "old_not_found": 17,
+  "touches_number": 7
+ },
+ "llm": null
+}

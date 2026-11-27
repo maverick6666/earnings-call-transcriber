@@ -1,0 +1,40 @@
+{
+ "tag": "O1R",
+ "model": "large-v3-turbo",
+ "calls": [
+  "samsungsds-2024Q2",
+  "samsungsds-2024Q3",
+  "samsungsds-2024Q4",
+  "samsungsds-2025Q1",
+  "samsungsds-2025Q2",
+  "samsungsds-2026Q1",
+  "samsungsds-2026Q2",
+  "samsungsds-2026Q3"
+ ],
+ "cer": [
+  0.50513
+ ],
+ "cer_talk": [
+  0.27498
+ ],
+ "cer_qa": [
+  0.92023
+ ],
+ "miss_talk": [
+  0.1055
+ ],
+ "entity_error_talk": [
+  0.48441
+ ],
+ "number_error_talk": [
+  0.03279
+ ],
+ "entity_error": [
+  0.53112
+ ],
+ "number_error": [
+  0.0586
+ ],
+ "reference_entities": 470,
+ "set": "test8"
+}

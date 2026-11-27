@@ -1,0 +1,87 @@
+{
+ "tag": "O1R+L-materials+search-claude-sonnet-5-5-web-nocommon",
+ "model": "large-v3-turbo",
+ "calls": [
+  "samsungsds-2025Q3",
+  "samsungsds-2025Q4"
+ ],
+ "cer": [
+  0.40511,
+  0.3948
+ ],
+ "cer_talk": [
+  0.11012,
+  0.09622
+ ],
+ "cer_qa": [
+  0.82813,
+  0.82299
+ ],
+ "miss_talk": [
+  0.0758,
+  0.06172
+ ],
+ "entity_error_talk": [
+  0.54399,
+  0.25651
+ ],
+ "number_error_talk": [
+  0.01748,
+  0.01748
+ ],
+ "entity_error": [
+  0.55792,
+  0.31557
+ ],
+ "number_error": [
+  0.05147,
+  0.05147
+ ],
+ "reference_entities": 128,
+ "outcome": {
+  "fixed": 55,
+  "broke": 2,
+  "still_wrong": 39,
+  "neutral": 0,
+  "applied": 96
+ },
+ "edits_in_script": {
+  "applied_pairs": 61,
+  "new_in_script": 56,
+  "old_in_script": 3
+ },
+ "decisions": {
+  "case_or_spacing_only": 24,
+  "ok": 85,
+  "old_not_found": 8,
+  "not_similar": 6,
+  "adds_or_drops_part": 1
+ },
+ "materials": {
+  "names": 153,
+  "proposals": 55,
+  "confirmed": 55,
+  "checks": {
+   "ok": 55
+  },
+  "cost_usd": 0.25
+ },
+ "search": {
+  "model": "claude-p:claude-sonnet-5-5",
+  "sessions": 0,
+  "cache_hits": 4,
+  "proposals": 52,
+  "confirmed": 42,
+  "checks": {
+   "ok": 41,
+   "not_in_search_results": 11
+  },
+  "retry_checks": {
+   "not_in_search_results": 10,
+   "ok": 1
+  },
+  "calls_that_saw_scripts": 2,
+  "cost_usd": 1.47
+ },
+ "set": "dev2"
+}

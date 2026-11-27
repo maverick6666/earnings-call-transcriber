@@ -12,6 +12,8 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
+from callscribe.runner import STRATEGIES
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -51,7 +53,7 @@ def main() -> None:
     for corpus in ("earnings21", "zeroth"):
         groups: dict[tuple[str, str], list[dict]] = defaultdict(list)
         for p in (ROOT / "runs" / corpus).glob("*/*/*.json"):
-            if p.name.endswith(".words.json"):
+            if p.stem not in STRATEGIES:  # 실행 기록만(.words · .risk · +L 교정 결과는 뺀다)
                 continue
             r = json.loads(p.read_text(encoding="utf-8"))
             groups[(p.parent.parent.name, r["strategy"])].append(r)
